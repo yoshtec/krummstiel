@@ -57,7 +57,9 @@ class Operation:
 
 
 class MiDevice:
-    def __init__(self, uid: str, base_path: Path, alias: str, exclude=None, op=Operation()):
+    def __init__(
+        self, uid: str, base_path: Path, alias: str, exclude=None, op=Operation()
+    ):
 
         if not op:
             op = Operation()
@@ -70,7 +72,9 @@ class MiDevice:
         self.exclude = exclude
         # computed properties
         self.target: Path = base_path.joinpath(self.alias).resolve()
-        self._mount_point: Path = base_path.joinpath(".mount").joinpath(self.uid).resolve()
+        self._mount_point: Path = (
+            base_path.joinpath(".mount").joinpath(self.uid).resolve()
+        )
 
         self.is_mounted: bool = False
         self.is_present: bool = self._is_present()
@@ -155,7 +159,9 @@ class MiDevice:
             devices = self.op.call(["idevicepair", "list"])
             return self.uid in devices
         except RuntimeError as e:
-            self.op.error(f"Error while checking if {self.uid} is paired with this host: {e}")
+            self.op.error(
+                f"Error while checking if {self.uid} is paired with this host: {e}"
+            )
         return False
 
     def pair(self):
@@ -204,10 +210,14 @@ def main(argv):
         "--discover",
         "-d",
         dest="discover",
-        help="list devices that are currently connected, yet not in your config file.",
+        action="store_true",
+        help="List devices that are currently connected, yet not in your config file. "
+        "Print configuration stub for the config file",
     )
 
-    parser.add_argument("--verbose", "-v", help="verbose output", dest="verbose")
+    parser.add_argument(
+        "--verbose", "-v", help="verbose output", dest="verbose", action="store_true"
+    )
 
     # safety net if no arguments are given call for help
     if len(sys.argv[1:]) == 0:
@@ -223,6 +233,7 @@ def main(argv):
     op = Operation()
     if pa.verbose:
         op = Operation(debug=print, error=print, info=print)
+        op.debug("entering verbose mode")
 
     # Check for prereq
     required_commands = ["idevicepair", "ifuse", "rsync", "umount", "idevice_id"]
@@ -237,6 +248,8 @@ def main(argv):
             op.error(f"    apt install libimobiledevice ")
             return 1
 
+    has_error = False
+
     if pa.config:
 
         config = configparser.ConfigParser()
@@ -245,35 +258,41 @@ def main(argv):
         if pa.discover:
             for dev in MiDevice.discover(op=op):
                 if not config.has_section(dev):
-                    print(f"device discovered: {dev}")
-                    print(f"Add to your config file:")
-                    print()
-                    print("---")
-                    print(f"[{dev}]")
-                    print(f"name = {dev}")
-                    print("---")
-                    print()
-                    print(f"Also pair your device by executing:")
-                    print(f"    idevicepair -u {dev}")
+                    op.info(f"device discovered: {dev}")
+                    op.info(f"Add to your config file:")
+                    op.info()
+                    op.info("---")
+                    op.info(f"[{dev}]")
+                    op.info(f"name = {dev}")
+                    op.info("---")
+                    op.info()
+                    op.info(f"Also pair your device by executing:")
+                    op.info(f"    idevicepair -u {dev}")
 
         for s in config.sections():
 
-            name = config.get(s, "name")
+            name = config.get(s, "name", fallback=None)
             if name is None:
-                op.error(f"name is missing from config section: {s}")
+                op.error(
+                    f"config error: 'name' tag is missing from config section: [{s}]"
+                )
+                has_error = True
                 continue
 
             if config.getboolean(s, "ignore", fallback=False):
-                op.info(f"ignoring device {name} with uid: {s}")
+                op.info(f"ignoring device '{name}' with uid={s}")
                 continue
 
-            backup_path = config.get(s, "backup_path")
+            backup_path = config.get(s, "backup_path", fallback=None)
             if backup_path is None:
-                op.error(f"backup_path is missing from config section {s} or in [DEFAULT] section")
+                op.error(
+                    f"config error: backup_path is missing from config section [{s}] or in [DEFAULT] section"
+                )
+                has_error = True
                 continue
             backup_path = Path(backup_path)
 
-            exclude = config.get(s, "exclude")
+            exclude = config.get(s, "exclude", fallback=None)
             if exclude is not None:
                 if exclude.startswith("[") and exclude.endswith("]"):
                     import json
@@ -282,22 +301,27 @@ def main(argv):
                         exclude = json.loads(exclude)
                     except RuntimeError as e:
                         op.error(
-                            f"error reading exclude array from config section {s}, error={e}"
+                            f"config error: error reading exclude array from config section [{s}], error={e}"
                         )
-                        op.error(f"stopping backup for device {name} with uid {s} ")
+                        op.error(f"stopping backup for device '{name}' with uid='{s}' ")
+                        has_error = True
                         continue
                 else:
                     # only single to exclude
                     exclude = [exclude]
 
-            device = MiDevice(uid=s, base_path=backup_path, alias=name, exclude=exclude, op=op)
+            device = MiDevice(
+                uid=s, base_path=backup_path, alias=name, exclude=exclude, op=op
+            )
 
             if not device.is_present:
-                op.info(f"device {name} with uid {s} not connected. skipping!")
+                op.info(f"device '{name}' with uid={s} not connected. skipping!")
                 continue
 
             if not device.check_paired():
-                op.info(f"please pair your device {device.alias} uid={device.uid} by executing:")
+                op.info(
+                    f"please pair your device '{device.alias}' uid={device.uid} by executing:"
+                )
                 op.info(f"    idevicepair -u {device.uid}")
                 continue
 
@@ -309,6 +333,9 @@ def main(argv):
 
             device.umount()
             device.notify()
+
+    if has_error:
+        return 2
 
     return 0
 
