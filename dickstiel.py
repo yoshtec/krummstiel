@@ -8,11 +8,9 @@
 
 # TODO: evaluate and use python bindings of libimobiledevice https://github.com/upbit/python-imobiledevice_demo
 
-
 import os
 import sys
 import logging
-import shlex
 import shutil
 from pathlib import Path
 
@@ -44,14 +42,16 @@ def check_call(args, ignore_return_code=False):
 class MiDevice:
     def __init__(self, uid: str, base_path: Path, alias: str, exclude=None):
 
+        self.uid: str = uid
+        self.alias: str = alias
         if exclude is None:
             exclude = []
         self.exclude = exclude
-        self.uid = uid
-        self.alias = alias
+        # computed properties
         self.target: Path = base_path.joinpath(self.alias).resolve()
-        self._mount_point = base_path.joinpath(".mount").joinpath(self.uid).resolve()
-        self.is_mounted = False
+        self._mount_point: Path = base_path.joinpath(".mount").joinpath(self.uid).resolve()
+
+        self.is_mounted: bool = False
         self.is_present: bool = self._is_present()
 
     def _is_present(self):
@@ -87,12 +87,20 @@ class MiDevice:
 
     def backup(self):
         try:
+            if not self.target.exists():
+                self.target.mkdir(parents=True, exist_ok=True)
+            else:
+                # set last modifcation time to the begin of backup time
+                self.target.touch()
+
             cmd = ["rsync", "-avzh"]
             for e in self.exclude:
                 cmd.extend(["--exclude", e])
             cmd.extend([str(self._mount_point), str(self.target)])
             check_call(cmd)
+
         except RuntimeError as e:
+            print(f"error while backup of {self.alias}: {e}")
             logging.error(e)
 
     def prune_photos(self):
@@ -129,6 +137,7 @@ class MiDevice:
     def discover(cls):
         cmd = ["idevice_id", "-l"]
         devices = check_call(cmd)
+        return devices
 
     def __del__(self):
         self.umount()
@@ -139,6 +148,7 @@ class MiDevice:
 
 def main(argv):
     import argparse
+    import configparser
 
     parser = argparse.ArgumentParser(
         description="this is the Dickstiel iOS Backup tool! Regularly backup multiple iOS devices",
@@ -157,6 +167,13 @@ def main(argv):
         dest="config",
         required=True,
         help="use config file",
+    )
+
+    parser.add_argument(
+        "--discover",
+        "-d",
+        dest="discover",
+        help="list devices that are currently connected, yet not in your config file.",
     )
 
     parser.add_argument("--verbose", "-v", help="verbose output", action="count")
@@ -181,31 +198,45 @@ def main(argv):
             satisfied = False
 
         if not satisfied:
-            print(f"prereqs are missing! please install")
-            print(f"    apt install libimobiledevice")
+            print(f"Requirements are missing! please install")
+            print(f"    apt install libimobiledevice ")
             return 1
 
     if pa.config:
-        import configparser
 
         config = configparser.ConfigParser()
         config.read(pa.config)
 
+        if pa.discover:
+            for dev in MiDevice.discover():
+                if not config.has_section(dev):
+                    print(f"device discovered: {dev}")
+                    print(f"Add to your config file:")
+                    print()
+                    print("---")
+                    print(f"[{dev}]")
+                    print(f"name = {dev}")
+                    print("---")
+                    print()
+                    print(f"Also pair your device by executing:")
+                    print(f"    idevicepair -u {dev}")
+
         for s in config.sections():
 
-            print("section:", s)
-            for a in config[s]:
-                print("config", a, config[s][a])
+            name = config.get(s, "name")
+            if name is None:
+                print(f"name is missing from config section: {s}")
+                continue
 
-            uid = config.get(s, "uid")
-            backup_path = Path(config.get(s, "backup_path"))
+            if config.getboolean(s, "ignore", fallback=False):
+                print(f"ignoring device {name} with uid: {s}")
+                continue
 
+            backup_path = config.get(s, "backup_path")
             if backup_path is None:
-                print(f"backup_path is missing from config section {s}")
+                print(f"backup_path is missing from config section {s} or in [DEFAULT] section")
                 continue
-            elif uid is None:
-                print(f"uid is missing from config section: {s}")
-                continue
+            backup_path = Path(backup_path)
 
             exclude = config.get(s, "exclude")
             if exclude is not None:
@@ -218,22 +249,27 @@ def main(argv):
                         print(
                             f"error reading exclude array from config section {s}, error={e}"
                         )
-                        print(f"stopping backup for device {s} with uid {uid} ")
+                        print(f"stopping backup for device {name} with uid {s} ")
                         continue
                 else:
                     # only single to exclude
                     exclude = [exclude]
 
-            device = MiDevice(uid=uid, base_path=backup_path, alias=s, exclude=exclude)
+            device = MiDevice(uid=s, base_path=backup_path, alias=name, exclude=exclude)
 
-            device.mount()
-            device.backup()
+            if device.check_paired():
 
-            if config.getboolean(s, "prune_photos", fallback=False):
-                device.prune_photos()
+                device.mount()
+                device.backup()
 
-            device.umount()
-            device.notify()
+                if config.getboolean(s, "prune_photos", fallback=False):
+                    device.prune_photos()
+
+                device.umount()
+                device.notify()
+            else:
+                print(f"please pair your device {device.alias} uid={device.uid} by executing:")
+                print(f"    idevicepair -u {device.uid}")
 
     return 0
 
