@@ -23,7 +23,7 @@ def check_call(args, ignore_return_code=False):
     import subprocess
 
     cmd_str = " ".join(args)
-    logging.info(f"Execute command: '{cmd_str}'")
+    print(f"Execute command: '{cmd_str}'")
     p = subprocess.Popen(
         args,
         stdout=subprocess.PIPE,
@@ -50,7 +50,7 @@ class MiDevice:
         self.uid = uid
         self.alias = alias
         self.target: Path = base_path.joinpath(self.alias).resolve()
-        self._mount_point = Path(self.target).joinpath(".mount").joinpath(self.uid).resolve()
+        self._mount_point = base_path.joinpath(".mount").joinpath(self.uid).resolve()
         self.is_mounted = False
         self.is_present: bool = self._is_present()
 
@@ -89,8 +89,7 @@ class MiDevice:
         try:
             cmd = ["rsync", "-avzh"]
             for e in self.exclude:
-                cmd.extend("--exclude")
-                cmd.extend(e)
+                cmd.extend(["--exclude", e])
             cmd.extend([str(self._mount_point), str(self.target)])
             check_call(cmd)
         except RuntimeError as e:
