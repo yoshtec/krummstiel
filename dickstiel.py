@@ -9,6 +9,7 @@
 # TODO: evaluate and use python bindings of libimobiledevice https://github.com/upbit/python-imobiledevice_demo
 
 import os
+import shlex
 import sys
 import logging
 import shutil
@@ -31,9 +32,11 @@ def check_call(args, ignore_return_code=False):
     )
     stdout, stderr = p.communicate()
     if stdout:
-        logging.debug(stdout)
+        #logging.debug(stdout)
+        print(f"stdout: {stdout}")
     if stderr:
-        logging.debug(stderr)
+        #logging.debug(stderr)
+        print(f"stderr: {stderr}")
     if not ignore_return_code and p.returncode != 0:
         raise RuntimeError(f"failed to run '{cmd_str}'")
     return stdout
@@ -63,9 +66,12 @@ class MiDevice:
         return False
 
     def mount(self):
+        if not self.is_present:
+            return
+
         try:
             self._mount_point.mkdir(parents=True, exist_ok=True)
-            cmd = ["ifuse", "-u", self.uid, str(self._mount_point)]
+            cmd = ["ifuse", "-u", shlex.qoute(self.uid), str(self._mount_point)]
             check_call(cmd)
             self.is_mounted = True
         except RuntimeError as e:
@@ -86,6 +92,10 @@ class MiDevice:
             print(f"    sudo umount --force {self._mount_point}")
 
     def backup(self):
+        if not self.is_mounted:
+            print(f"cannot backup {self.alias}: device not mounted")
+            return
+
         try:
             if not self.target.exists():
                 self.target.mkdir(parents=True, exist_ok=True)
@@ -104,6 +114,10 @@ class MiDevice:
             logging.error(e)
 
     def prune_photos(self):
+        if not self.is_mounted:
+            print(f"cannot prune {self.alias}: device not mounted")
+            return
+
         # cleanup of iphone: delete photos and videos of certain age
         # except if in favourites
 
@@ -135,9 +149,7 @@ class MiDevice:
 
     @classmethod
     def discover(cls):
-        cmd = ["idevice_id", "-l"]
-        devices = check_call(cmd)
-        return devices
+        return check_call(["idevice_id", "-l"])
 
     def __del__(self):
         self.umount()
@@ -257,19 +269,23 @@ def main(argv):
 
             device = MiDevice(uid=s, base_path=backup_path, alias=name, exclude=exclude)
 
-            if device.check_paired():
+            if not device.is_present:
+                print(f"device {name} with uid {s} not here, skipping")
+                continue
 
-                device.mount()
-                device.backup()
-
-                if config.getboolean(s, "prune_photos", fallback=False):
-                    device.prune_photos()
-
-                device.umount()
-                device.notify()
-            else:
+            if not device.check_paired():
                 print(f"please pair your device {device.alias} uid={device.uid} by executing:")
                 print(f"    idevicepair -u {device.uid}")
+                continue
+
+            device.mount()
+            device.backup()
+
+            if config.getboolean(s, "prune_photos", fallback=False):
+                device.prune_photos()
+
+            device.umount()
+            device.notify()
 
     return 0
 
