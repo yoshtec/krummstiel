@@ -49,8 +49,8 @@ class MiDevice:
         self.exclude = exclude
         self.uid = uid
         self.alias = alias
-        self.target: Path = base_path.joinpath(self.alias)
-        self._mount_point = Path(self.target).joinpath(".mount").joinpath(self.uid)
+        self.target: Path = base_path.joinpath(self.alias).resolve()
+        self._mount_point = Path(self.target).joinpath(".mount").joinpath(self.uid).resolve()
         self.is_mounted = False
         self.is_present: bool = self._is_present()
 
@@ -65,7 +65,7 @@ class MiDevice:
     def mount(self):
         try:
             self._mount_point.mkdir(parents=True, exist_ok=True)
-            cmd = ["ifuse", "-u", self.uid, self._mount_point]
+            cmd = ["ifuse", "-u", self.uid, str(self._mount_point)]
             check_call(cmd)
             self.is_mounted = True
         except RuntimeError as e:
@@ -76,7 +76,7 @@ class MiDevice:
             return
 
         try:
-            cmd = ["umount", self._mount_point]
+            cmd = ["umount", str(self._mount_point)]
             check_call(cmd)
             self.is_mounted = False
         except RuntimeError as e:
@@ -91,7 +91,7 @@ class MiDevice:
             for e in self.exclude:
                 cmd.extend("--exclude")
                 cmd.extend(e)
-            cmd.extend([self._mount_point, self.target])
+            cmd.extend([str(self._mount_point), str(self.target)])
             check_call(cmd)
         except RuntimeError as e:
             logging.error(e)
