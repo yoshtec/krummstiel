@@ -8,7 +8,6 @@
 
 # TODO: evaluate and use python bindings of libimobiledevice https://github.com/upbit/python-imobiledevice_demo
 
-import os
 import shlex
 import sys
 import logging
@@ -32,10 +31,10 @@ def check_call(args, ignore_return_code=False):
     )
     stdout, stderr = p.communicate()
     if stdout:
-        #logging.debug(stdout)
+        # logging.debug(stdout)
         print(f"stdout: {stdout}")
     if stderr:
-        #logging.debug(stderr)
+        # logging.debug(stderr)
         print(f"stderr: {stderr}")
     if not ignore_return_code and p.returncode != 0:
         raise RuntimeError(f"failed to run '{cmd_str}'")
@@ -71,7 +70,7 @@ class MiDevice:
 
         try:
             self._mount_point.mkdir(parents=True, exist_ok=True)
-            cmd = ["ifuse", "-u", shlex.qoute(self.uid), str(self._mount_point)]
+            cmd = ["ifuse", "-u", shlex.quote(self.uid), str(self._mount_point)]
             check_call(cmd)
             self.is_mounted = True
         except RuntimeError as e:
