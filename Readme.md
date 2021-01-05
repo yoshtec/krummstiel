@@ -1,22 +1,90 @@
-# Dickstiel
+# Krummstiel
 
-Dickstiel is a small software helping in the backup process of your apple ios device. 
+Krummstiel is a small Python script automating regular backup apple ios device. It is in use on Linux, but could be run 
+on macOS as well with the proper tools installed.
+
+## Features
+
+Implemented: 
+
+* Automatically mount and copy Files to Backup path via rsync for configured and connected devices.
+* Configuration of backup path
+* Configure excluded paths globally or per Device
+* Help in connecting new devices 
+* Silently ignore disconnected devices
+
+Planned Features:
+* Notify user of the Backup start and finished
+* Delete old photos and videos from the device after backup. Should understand not to delete Favourites or specified 
+  albums. For that the `Photos.sqlite` database has to be read and understood. My efforts to understand the database 
+  are found in [photossqlite.md](photossqlite.md) File.
+
+
+## Get Stared
+
+1. Install required tools and libraries:  
+   Linux (Ubuntu 20.4):
+   ```bash
+   apt install libimobiledevice6 libimobiledevice-utils ifuse rsync 
+   ```
+   macOS:
+   ```bash
+   brew install --cask osxfuse
+   brew install libimobiledevice ifuse 
+   ```
+1. Create a target directory that will contain the backups e.g. via `mkdir /mnt/data/iphone_backups`
+1. Clone this Repository or get krummstiel.p
+1. Create your config file from [example.ini](config/example.ini)
+1. Discover connected devices via
+    ```bash
+    krummstiel.py --discover --config "/path/to/myconfig.ini"
+    ```
+1. run the script via:
+    ```bash
+    krummstiel.py --config "/path/to/myconfig.ini" --verbose
+    ```
+
+
+## Config
+
+Configuration is done via .ini File and is passed via `--config` or `-c` parameter.
+ ```ini
+ 
+[DEFAULT]
+
+# path fo the backup, the name of the device will always be appended
+backup_path = /mnt/data/iphone_backups
+
+# excludes can be an json array or a single value see example of iphone1
+# format is for rsync --exclude syntax
+exclude = Podcasts
+
+# Section naming will be used for identifying the ios device
+# Section is the uid of the ios device
+[1234567890abcdef1234567890abcdef12345678]
+# name is used to create the folder and copy files
+name = my_iphone
+# exclude can be repeated and is overriding exclude of the DEFAULT section
+# json array
+exclude = ["Podcasts", "Books"]
+```
+
+## Automating with UDEV (Linux onlz)
+[Udev](https://linux.die.net/man/8/udev) is a  
 
 # Name 
-The name of the program was chosen to be an Apple that is under threat. 
-One would assume that apples are ubiquitous and are in status "least concern", 
-while this is true for many apples (especially for commercially used apples) there are many apple types that are 
-endangered. 
+The name of the program was chosen to be an Apple that is under threat. One would assume that apples are ubiquitous 
+and are in status "least concern", while this is true for many apples (especially for commercially used and still 
+distributed apples) there are many apple types that are endangered. 
 
-The [Celler Dickstiel](https://de.wikipedia.org/wiki/Celler_Dickstiel) (sometimes also "Krügers Dickstiel") is an old 
+The [Rheinischer Krummstiel](https://de.wikipedia.org/wiki/Rheinischer_Krummstiel) is an old 
 apple variant which is on the "[Red list of endagered domestic plants](https://pgrdeu.genres.de/rlist)" of the German 
 "[Federal Office for Agriculture and Food](https://www.ble.de/EN/Home/home_node.html)". It can roughly be translated 
-to "thick stalk", which I found a good analogy for attaching the Apple device to thick usb cable.   
+to "crooked stalk", which I found a good analogy for attaching the Apple device to an usb cable.   
 
-
-There are more apples, that are under threat
-visit the [IUCN Threatened Species list](https://www.iucnredlist.org)
+There are more apples, that are under threat visit the [IUCN Threatened Species list](https://www.iucnredlist.org) for 
+a full list of all species.
 
 # License
 
-Dickstiel uses the MIT License.
+Krummstiel uses the MIT License.

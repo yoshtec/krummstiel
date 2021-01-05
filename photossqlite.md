@@ -1,8 +1,10 @@
 # Information on Photos.sqlite
 
-`Photos.sqlite` is an sqlite database in the `PhotoData`
+`Photos.sqlite` is an sqlite database in the `PhotoData`. I contains a lot of Metadata for your Photos on the iPhone /
+iPad. 
 
-Some general information https://www.forensicmike1.com/2019/05/02/ios-photos-sqlite-forensics/
+Since it is not generally documented, I will document my research in understanding the Database here.
+
 
 # Tables
 
@@ -19,3 +21,8 @@ SELECT DISTINCT m.name as 'tablename',  ti.*
  WHERE m.type='table' and ti.name like 'ZASSET%'
  ORDER BY 1,3;
 ```
+
+# Other Sources:
+* Some general information from a forensics guy <https://www.forensicmike1.com/2019/05/02/ios-photos-sqlite-forensics/>
+
+* A Rust library for interaction with the Database: <https://github.com/dangreco/rust-apple-photos>

@@ -174,7 +174,8 @@ class MiDevice:
 
     @classmethod
     def discover(cls, op=Operation()):
-        return op.call(["idevice_id", "-l"])
+        if op:
+            return op.call(["idevice_id", "-l"])
 
     def __del__(self):
         self.umount()
@@ -260,12 +261,12 @@ def main(argv):
                 if not config.has_section(dev):
                     op.info(f"device discovered: {dev}")
                     op.info(f"Add to your config file:")
-                    op.info()
+                    op.info("")
                     op.info("---")
                     op.info(f"[{dev}]")
                     op.info(f"name = {dev}")
                     op.info("---")
-                    op.info()
+                    op.info("")
                     op.info(f"Also pair your device by executing:")
                     op.info(f"    idevicepair -u {dev}")
 
