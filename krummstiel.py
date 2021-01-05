@@ -300,6 +300,7 @@ def main(argv):
                         op.info(f"    idevicepair -u {dev}")
                     else:
                         op.info(f"device is already paired")
+            return 0
 
         for s in config.sections():
 
