@@ -141,7 +141,7 @@ class MiDevice:
             self.op.error("try running:")
             self.op.error(f"    sudo umount --force {self._mount_point}")
 
-    def backup(self):
+    def backup(self, verbose=False):
         if not self.is_mounted:
             self.op.info(f"cannot backup {self.alias}: device not mounted")
             return
@@ -154,7 +154,9 @@ class MiDevice:
                 # set last modification time to the begin of backup time
                 self.target.touch()
 
-            cmd = ["rsync", "-avzh"]
+            cmd = ["rsync", "-azh"]
+            if verbose:
+                cmd.extend(["-v"])
             for e in self.exclude:
                 cmd.extend(["--exclude", shlex.quote(e)])
             cmd.extend([str(self._mount_point), str(self.target)])
@@ -216,13 +218,7 @@ def main(argv):
     import configparser
 
     parser = argparse.ArgumentParser(
-        description="this is the Dickstiel iOS Backup tool! Regularly backup multiple iOS devices",
-    )
-
-    parser.add_argument(
-        "--explain",
-        help="Explain what %(prog)s does (and stop)",
-        action="store_true",
+        description="This is the 'krummstiel' iOS Backup tool! Regularly backup multiple iOS devices.",
     )
 
     parser.add_argument(
@@ -244,7 +240,12 @@ def main(argv):
     )
 
     parser.add_argument(
-        "--verbose", "-v", help="verbose output", dest="verbose", action="store_true"
+        "--verbose",
+        "-v",
+        help="verbose output",
+        dest="verbose",
+        action="count",
+        default=0,
     )
 
     # safety net if no arguments are given call for help
@@ -254,17 +255,20 @@ def main(argv):
 
     pa = parser.parse_args(argv[1:])
 
-    if pa.explain:
-        sys.stdout.write(__doc__)
-        return 0
-
     op = Operation()
-    if pa.verbose:
+    if pa.verbose > 0:
         op = Operation(debug=print, error=print, info=print)
         op.debug("entering verbose mode")
 
     # Check for prereq
-    required_commands = ["idevicepair", "ifuse", "rsync", "umount", "idevice_id"]
+    required_commands = [
+        "idevicepair",
+        "ifuse",
+        "rsync",
+        "umount",
+        "idevice_id",
+        "ideviceinfo",
+    ]
     for cmd in required_commands:
         satisfied = True
         if shutil.which(cmd) is None:
@@ -359,7 +363,7 @@ def main(argv):
                 continue
 
             device.mount()
-            device.backup()
+            device.backup(verbose=pa.verbose >= 2)
 
             if config.getboolean(s, "prune_photos", fallback=False):
                 device.prune_photos()
