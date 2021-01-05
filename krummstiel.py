@@ -58,26 +58,41 @@ class Operation:
 
 class MiDevice:
     def __init__(
-        self, uid: str, base_path: Path, alias: str, exclude=None, op=Operation()
+        self,
+        uid: str,
+        base_path: Path = None,
+        alias: str = None,
+        exclude=None,
+        op=Operation(),
     ):
+
+        self.uid: str = uid
 
         if not op:
             op = Operation()
         self.op: Operation = op
 
-        self.uid: str = uid
+        self.is_present: bool = self._is_present()
+
+        if not alias:
+            alias = self.get_name()
         self.alias: str = alias
+
         if exclude is None:
             exclude = []
         self.exclude = exclude
+
         # computed properties
-        self.target: Path = base_path.joinpath(self.alias).resolve()
-        self._mount_point: Path = (
-            base_path.joinpath(".mount").joinpath(self.uid).resolve()
-        )
+        self.target: Path = None
+        self._mount_point: Path = None
+        if base_path:
+            self.target = base_path.joinpath(self.alias).resolve()
+
+            self._mount_point = (
+                base_path.joinpath(".mount").joinpath(self.uid).resolve()
+            )
 
         self.is_mounted: bool = False
-        self.is_present: bool = self._is_present()
 
     def _is_present(self):
         try:
@@ -87,8 +102,20 @@ class MiDevice:
             self.op.error(f"error while checking for devices {e}")
         return False
 
-    def mount(self):
+    def get_name(self):
         if not self.is_present:
+            return None
+        try:
+            info = self.op.call(
+                ["ideviceinfo", "--key", "DeviceName", "-u", shlex.quote(self.uid)]
+            )
+            return info
+        except RuntimeError as e:
+            self.op.info(f"could not retrieve name of device uid={self.uid}")
+
+    def mount(self):
+        if not self.is_present or not self._mount_point:
+            self.op.debug(f"will not mount device {self.uid} while path was missing")
             return
 
         try:
@@ -257,18 +284,22 @@ def main(argv):
         config.read(pa.config)
 
         if pa.discover:
-            for dev in MiDevice.discover(op=op):
+            for dev in MiDevice.discover(op=op).splitlines():
                 if not config.has_section(dev):
-                    op.info(f"device discovered: {dev}")
+                    device = MiDevice(uid=dev, op=op)
+                    op.info(f"new device discovered: {dev}")
                     op.info(f"Add to your config file:")
                     op.info("")
                     op.info("---")
                     op.info(f"[{dev}]")
-                    op.info(f"name = {dev}")
+                    op.info(f"name = {device.get_name()}")
                     op.info("---")
                     op.info("")
-                    op.info(f"Also pair your device by executing:")
-                    op.info(f"    idevicepair -u {dev}")
+                    if not device.check_paired():
+                        op.info(f"Also pair your device by executing:")
+                        op.info(f"    idevicepair -u {dev}")
+                    else:
+                        op.info(f"device is already paired")
 
         for s in config.sections():
 
