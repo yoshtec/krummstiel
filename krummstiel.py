@@ -242,7 +242,7 @@ def main(argv):
     parser.add_argument(
         "--verbose",
         "-v",
-        help="verbose output",
+        help="verbose output, increase amount to increase verbosity",
         dest="verbose",
         action="count",
         default=0,
@@ -277,7 +277,7 @@ def main(argv):
 
         if not satisfied:
             op.error(f"Requirements are missing! please install")
-            op.error(f"    apt install libimobiledevice ")
+            op.error(f"    apt install libimobiledevice-utils rsync ifuse ")
             return 1
 
     has_error = False
@@ -291,15 +291,17 @@ def main(argv):
             for dev in MiDevice.discover(op=op).splitlines():
                 if not config.has_section(dev):
                     device = MiDevice(uid=dev, op=op)
+                    device_name = device.get_name()
+                    device_paired = device.check_paired()
+
                     op.info(f"new device discovered: {dev}")
                     op.info(f"Add to your config file:")
-                    op.info("")
                     op.info("---")
                     op.info(f"[{dev}]")
-                    op.info(f"name = {device.get_name()}")
+                    op.info(f"name = {device_name}")
                     op.info("---")
                     op.info("")
-                    if not device.check_paired():
+                    if not device_paired:
                         op.info(f"Also pair your device by executing:")
                         op.info(f"    idevicepair -u {dev}")
                     else:

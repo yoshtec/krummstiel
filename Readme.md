@@ -18,29 +18,29 @@ Planned Features:
 * Delete old photos and videos from the device after backup. Should understand not to delete Favourites or specified 
   albums. For that the `Photos.sqlite` database has to be read and understood. My efforts to understand the database 
   are found in [photossqlite.md](photossqlite.md) File.
-
+* Backup application data
 
 ## Get Stared
 
 1. Install required tools and libraries:  
    Linux (Ubuntu 20.4):
-   ```bash
+   ```shell
    apt install libimobiledevice6 libimobiledevice-utils ifuse rsync 
    ```
    macOS:
-   ```bash
+   ```shell
    brew install --cask osxfuse
    brew install libimobiledevice ifuse 
    ```
 1. Create a target directory that will contain the backups e.g. via `mkdir /mnt/data/iphone_backups`
-1. Clone this Repository or get krummstiel.p
-1. Create your config file from [example.ini](config/example.ini)
+1. Clone this Repository or get `krummstiel.py`
+1. Create your config file from [example.ini](example.ini)
 1. Discover connected devices via
-    ```bash
+    ```shell
     krummstiel.py --discover --config "/path/to/myconfig.ini"
     ```
 1. run the script via:
-    ```bash
+    ```shell
     krummstiel.py --config "/path/to/myconfig.ini" --verbose
     ```
 
@@ -69,8 +69,18 @@ name = my_iphone
 exclude = ["Podcasts", "Books"]
 ```
 
-## Automating with UDEV (Linux onlz)
-[Udev](https://linux.die.net/man/8/udev) is a  
+## Automating with UDEV (Linux only)
+[Udev](https://linux.die.net/man/8/udev) allows you to run scripts when devices are plugged in.
+
+Examples: 
+* <https://unix.stackexchange.com/questions/28548/how-to-run-custom-scripts-upon-usb-device-plug-in>
+* <https://github.com/justinpearson/Raspberry-Pi-for-iPhone-Backup#4a-udev-example>
+
+## Automating with cron
+Krummstiel can just run regularly with as a cronjob. Running it with your user ensures that you have access to the files backed up.
+```shell
+*/5 *    * * *   your_user_id    path/to/krummstiel.py --config "path/to/config.ini" >> /path/to/backup.log
+```
 
 # Name 
 The name of the program was chosen to be an Apple that is under threat. One would assume that apples are ubiquitous 
