@@ -11,6 +11,7 @@
 import shlex
 import sys
 import shutil
+import os
 from pathlib import Path
 
 ENC = "utf-8"
@@ -154,12 +155,12 @@ class MiDevice:
                 # set last modification time to the begin of backup time
                 self.target.touch()
 
-            cmd = ["rsync", "-azh"]
+            cmd = ["rsync", "-ah"]
             if verbose:
                 cmd.extend(["-v"])
             for e in self.exclude:
                 cmd.extend(["--exclude", shlex.quote(e)])
-            cmd.extend([str(self._mount_point), str(self.target)])
+            cmd.extend([f"{self._mount_point}{os.sep}", str(self.target)])
             self.op.call(cmd)
             self.op.info("finished backup")
         except RuntimeError as e:
