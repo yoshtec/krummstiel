@@ -10,9 +10,28 @@ Location:
 * iPhone & iPad: `PhotoData/Photos.sqlite` Folder on the mounted device. Photos itself are stored in `DCIM/****APPL`.
 
 
+Ways of analysing, store or snapshot different versions and just do an diff of the Files
+
+```
+sqldiff Older-Photos.sqlite Newer-Photos.sqlite
+```
+
+# Questions
+
+## Where are is the Relation of Photos to Albums? E.g. which Photo is in Album 'A'
+Tried to do an sqldiff, but unfortunately no clear Pic where it is. Came to the conclusion that it might be stored in other files `PhotoData/AlbumsMetadata` is a good candidate.
+ 
+Analyse via 
+```sh
+plistutil -i SOME-UUID.albummetadata
+plistutil -i SOME-UUID.albummetadata | xmllint --xpath '//dict/array/string' -    
+
+# data field seems interesting
+for i in *.albummetadata; do plistutil -i "$i" | xmllint --xpath "translate(normalize-space(//dict/array/data/text()), ' &#9;&#10;&#13', '')" - | base64 -d  ; done
+
+```
+
 # Tables
-
-
 
 ## ZASSET
 Table with interesting fields `ZDIRECTORY` and `ZFILENAME` for Filenames mapped to the `ZUUID` which is referenced in 
