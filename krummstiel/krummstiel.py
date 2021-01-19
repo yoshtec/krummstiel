@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: MIT
 
 """
+Backup multiple iOS (iPhone/iPad) devices regularly.
 
+For documentation visit: https://github.com/yoshtec/krummstiel
 """
 
 # TODO: evaluate and use python bindings of libimobiledevice https://github.com/upbit/python-imobiledevice_demo
@@ -103,6 +105,12 @@ class MiDevice:
             self.op.error(f"error while checking for devices {e}")
         return False
 
+    def is_cooled_down(self, minutes=0):
+        if self.target:
+            import time
+            return time.time() - self.target.lstat().st_mtime > minutes * 60
+        return False
+
     def get_name(self):
         if not self.is_present:
             return None
@@ -112,7 +120,7 @@ class MiDevice:
             )
             return info
         except RuntimeError as e:
-            self.op.info(f"could not retrieve name of device uid={self.uid}")
+            self.op.info(f"could not retrieve name of device uid={self.uid}, error {e}")
 
     def mount(self):
         if not self.is_present or not self._mount_point:
@@ -214,12 +222,13 @@ class MiDevice:
         self.umount()
 
 
-def main(argv):
+def main(argv=None):
     import argparse
     import configparser
 
     parser = argparse.ArgumentParser(
         description="This is the 'krummstiel' iOS Backup tool! Regularly backup multiple iOS devices.",
+        epilog="Source and information: https://github.com/yoshtec/krummstiel",
     )
 
     parser.add_argument(
@@ -249,12 +258,15 @@ def main(argv):
         default=0,
     )
 
+    if not argv:
+        argv = sys.argv[1:]
+
     # safety net if no arguments are given call for help
-    if len(sys.argv[1:]) == 0:
+    if len(argv) == 0:
         parser.print_help()
         return 0
 
-    pa = parser.parse_args(argv[1:])
+    pa = parser.parse_args(argv)
 
     op = Operation()
     if pa.verbose > 0:
@@ -287,6 +299,9 @@ def main(argv):
 
         config = configparser.ConfigParser()
         config.read(pa.config)
+
+        if len(config.sections()) == 0:
+            op.info(f"Warning: config file '{pa.config}' is empty or not existent")
 
         if pa.discover:
             for dev in MiDevice.discover(op=op).splitlines():
@@ -364,6 +379,10 @@ def main(argv):
                 )
                 op.info(f"    idevicepair -u {device.uid}")
                 continue
+
+            cool_down_period = config.getint(s, "cool_down_period", fallback=0)
+            if not device.is_cooled_down(cool_down_period):
+                op.info(f"device '{name}' with uid={s} not cooled down. skipping!")
 
             device.mount()
             device.backup(verbose=pa.verbose >= 2)

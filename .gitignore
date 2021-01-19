@@ -1,5 +1,11 @@
 venv
+dist
+build
+
+krummstiel.egg-info
+
 .idea
 
 tmp
+tmp.txt
 

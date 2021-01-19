@@ -27,9 +27,28 @@ plistutil -i SOME-UUID.albummetadata
 plistutil -i SOME-UUID.albummetadata | xmllint --xpath '//dict/array/string' -    
 
 # data field seems interesting
-for i in *.albummetadata; do plistutil -i "$i" | xmllint --xpath "translate(normalize-space(//dict/array/data/text()), ' &#9;&#10;&#13', '')" - | base64 -d  ; done
-
+for i in *.albummetadata; do plistutil -i "$i" | xmllint --xpath "translate(normalize-space(//dict/array/data/text()), ' &#9;&#10;&#13', '')" -  ; done
 ```
+
+Python snippet for extracting Picture UUIDs . Link to file can be found then in `ZASSET` Table in field `ZUUID`
+```python
+
+import plistlib
+import uuid
+import pprint
+
+p = 6 # 6 for .albummetadata, 8 for .memorymetadata
+f = open("F6E73B17-FFB3-4718-801A-2E70B56AEB9A.albummetadata", "rb")
+x = plistlib.load(f)
+pprint.pp(x)
+
+chunk_size= 4
+for i in range(0, len(x['$objects'][p]), chunk_size):
+    ux = uuid.UUID(bytes=x['$objects'][p][i:i+16])
+    print(ux)
+    
+```
+
 
 # Tables
 

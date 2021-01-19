@@ -20,7 +20,7 @@ Planned Features:
   are found in [photossqlite.md](photossqlite.md) File.
 * Backup application data
 
-## Get Stared
+## Get Started
 
 1. Install required tools and libraries:  
    Linux (Ubuntu 20.4):
