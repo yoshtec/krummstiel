@@ -1,7 +1,8 @@
 # Krummstiel
 
-Krummstiel is a small Python script automating regular backup apple ios device. It is in use on Linux, but could be run 
-on macOS as well with the proper tools installed.
+Krummstiel is a small Python script automating regular backup apple ios device. The idea is to incrementally save 
+pictures to your server/desktop. It is in use on Linux, but could be run on macOS as well with the proper tools 
+installed. 
 
 ## Features
 
@@ -14,7 +15,7 @@ Implemented:
 * Silently ignore disconnected devices
 
 Planned Features:
-* Notify user of the Backup start and finished
+* Notify user of the backup start and finished on the device
 * Delete old photos and videos from the device after backup. Should understand not to delete Favourites or specified 
   albums. For that the `Photos.sqlite` database has to be read and understood. My efforts to understand the database 
   are found in [photossqlite.md](photossqlite.md) File.
@@ -32,16 +33,19 @@ Planned Features:
    brew install --cask osxfuse
    brew install libimobiledevice ifuse 
    ```
+1. Install krummstiel via
+    ```shell
+    pip install krummstiel
+    ```
 1. Create a target directory that will contain the backups e.g. via `mkdir /mnt/data/iphone_backups`
-1. Clone this Repository or get `krummstiel.py`
 1. Create your config file from [example.ini](example.ini)
 1. Discover connected devices via
     ```shell
-    krummstiel.py --discover --config "/path/to/myconfig.ini"
+    krummstiel --discover --config "/path/to/myconfig.ini"
     ```
 1. run the script via:
     ```shell
-    krummstiel.py --config "/path/to/myconfig.ini" --verbose
+    krummstiel --config "/path/to/myconfig.ini" --verbose
     ```
 
 
@@ -79,7 +83,7 @@ Examples:
 ## Automating with cron
 Krummstiel can just run regularly with as a cronjob. Running it with your user ensures that you have access to the files backed up.
 ```shell
-*/5 *    * * *   your_user_id    path/to/krummstiel.py --config "path/to/config.ini" >> /path/to/backup.log
+*/5 *    * * *   your_user_id    path/to/krummstiel --config "path/to/config.ini" >> /path/to/backup.log
 ```
 
 # Name 

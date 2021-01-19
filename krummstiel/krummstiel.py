@@ -108,6 +108,7 @@ class MiDevice:
     def is_cooled_down(self, minutes=0):
         if self.target:
             import time
+
             return time.time() - self.target.lstat().st_mtime > minutes * 60
         return False
 
