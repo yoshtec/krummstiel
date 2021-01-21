@@ -26,7 +26,7 @@ Planned Features:
 1. Install required tools and libraries:  
    Linux (Ubuntu 20.4):
    ```shell
-   apt install libimobiledevice6 libimobiledevice-utils ifuse rsync 
+   apt install libimobiledevice-utils ifuse rsync 
    ```
    macOS:
    ```shell
@@ -53,7 +53,6 @@ Planned Features:
 
 Configuration is done via .ini File and is passed via `--config` or `-c` parameter.
  ```ini
- 
 [DEFAULT]
 
 # path fo the backup, the name of the device will always be appended
@@ -92,11 +91,11 @@ and are in status "least concern", while this is true for many apples (especiall
 distributed apples) there are many apple types that are endangered. 
 
 The [Rheinischer Krummstiel](https://de.wikipedia.org/wiki/Rheinischer_Krummstiel) is an old 
-apple variant which is on the "[Red list of endagered domestic plants](https://pgrdeu.genres.de/rlist)" of the German 
+apple variant which is on the "[Red list of endangered domestic plants](https://pgrdeu.genres.de/rlist)" of the German 
 "[Federal Office for Agriculture and Food](https://www.ble.de/EN/Home/home_node.html)". It can roughly be translated 
 to "crooked stalk", which I found a good analogy for attaching the Apple device to an usb cable.   
 
-There are more apples, that are under threat visit the [IUCN Threatened Species list](https://www.iucnredlist.org) for 
+There are more apples, that are under threat. Visit the [IUCN Threatened Species list](https://www.iucnredlist.org) for 
 a full list of all species.
 
 # License
