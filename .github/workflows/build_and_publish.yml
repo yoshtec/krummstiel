@@ -26,7 +26,7 @@ jobs:
         run: sudo apt install -y libimobiledevice-utils ifuse rsync
 
       - name: Run small tests
-        run: pytest
+        run: python -m pytest
 
       - name: Build
         run: python setup.py sdist bdist_wheel
