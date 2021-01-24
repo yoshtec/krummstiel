@@ -14,15 +14,18 @@ import shlex
 import sys
 import shutil
 import os
+import uuid
+import pprint
 from pathlib import Path
 
 ENC = "utf-8"
 
 
 class Operation:
-    def __init__(self, debug=None, info=print, error=print):
+    def __init__(self, debug=None, info=print, warn=print, error=print):
         self._debug: callable = debug
         self._info: callable = info
+        self._warn: callable = warn
         self._error: callable = error
 
     def error(self, msg):
@@ -32,6 +35,10 @@ class Operation:
     def info(self, msg):
         if self._info:
             self._info(msg)
+
+    def warn(self, msg):
+        if self._warn:
+            self._warn(msg)
 
     def debug(self, msg):
         if self._debug:
@@ -57,6 +64,7 @@ class Operation:
         if not ignore_return_code and p.returncode != 0:
             raise RuntimeError(f"failed to run '{cmd_str}'")
         return stdout
+
 
 
 class MiDevice:
