@@ -14,6 +14,7 @@ import pprint
 import click
 import plistlib
 import datetime
+import shutil
 
 # important keys
 TOP = "$top"
@@ -25,10 +26,11 @@ ASSETS = 'assetUUIDs'
 SUUID = "uuid"
 TRASH = 'isInTrash'
 
-NSKEYS = 'NS.objects'
+NSKEYS = 'NS.keys'
 NSOBJECTS = 'NS.objects'
 NSTIME = 'NS.time'
 NSDATA = "NS.data"
+NSSTRING = 'NS.string'
 
 PLISTHEADER = b'bplist00'
 
@@ -53,47 +55,60 @@ def _unwrap_uuids(b):
     return data
 
 
-def unwrap_dict(d: dict):
-    if not d:
+def unwrap_dict(d: dict, orig: list = None):
+    if d is None:
         return {}
 
-    if NSKEYS in d and NSOBJECTS in d:
-        data2 = {}
-        for k, v in zip(d[NSKEYS], d[NSOBJECTS]):
-            data2[unwrap(k)] = unwrap(v)
-        return data2
+    if NSSTRING in d:
+        return d[NSSTRING]
 
-    if NSOBJECTS in d:
-        data2 = []
-        for v in d[NSOBJECTS]:
-            data2.append(unwrap(v))
-        return data2
+    if NSTIME in d:
+        return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=d[NSTIME])
 
     if ARC in d and TOP in d and OBJ in d:
         if d[ARC] == 'NSKeyedArchiver':
             return read_nsarchiver(d)
 
-    if NSTIME in d:
-        return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=d[NSTIME])
+    if NSDATA in d:
+        return unwrap(d[NSDATA])
+
+    if NSKEYS in d and NSOBJECTS in d:
+        data2 = {}
+        for k, v in zip(d[NSKEYS], d[NSOBJECTS]):
+            #print(f"k,v:{k},{v}")
+            k = unwrap(k, orig)
+            v = unwrap(v, orig)
+            #print(f"k,v:{k},{v}")
+            data2[k] = v
+        return data2
+
+    if NSOBJECTS in d:
+        data2 = []
+        for v in d[NSOBJECTS]:
+            data2.append(unwrap(v, orig))
+        return data2
 
     for t in d:
-        d[t] = unwrap(d[t])
+        d[t] = unwrap(d[t], orig)
 
     return d
 
 
-def unwrap(x):
-    if not x:
+def unwrap(x, orig: list = None):
+    if x is None:
         return ""
 
     if isinstance(x, int) or isinstance(x, float):
         return x
 
     if isinstance(x, plistlib.UID):
-        return x.data
+        x = x.data
+        if orig is not None and len(orig) > x:
+            x = unwrap(orig[x], orig)
+        return x
 
-    if type(x) is dict:
-        return unwrap_dict(x)
+    if isinstance(x, dict):
+        return unwrap_dict(x, orig)
 
     if type(x) is bytes:
         return _unwrap_bytes(x)
@@ -120,12 +135,10 @@ def read_nsarchiver(plist=None):
         if isinstance(index, plistlib.UID):
             index = index.data
             data = plist[OBJ][index]
-            print(f"t {t}, type {type(data)}")
-
             if type(data) is bytes:
                 result_dict[t] = _unwrap_bytes(data, str(t).endswith('UUIDs'))
             else:
-                result_dict[t] = unwrap(data)
+                result_dict[t] = unwrap(data, plist[OBJ])
         else:
             result_dict[t] = index
 
@@ -154,10 +167,12 @@ class BaseMetadataFile:
         self.unpacked_metadata = read_nsarchiver(self.metadata)
 
     def dump(self):
-        pprint.pp(self.metadata)
+        width, lines = shutil.get_terminal_size()
+        pprint.pp(self.metadata, width=width)
 
     def dumpex(self):
-        pprint.pp(self.unpacked_metadata)
+        width, lines = shutil.get_terminal_size()
+        pprint.pp(self.unpacked_metadata, width=width)
 
 
 class PhotosMetadataFile(BaseMetadataFile):
@@ -232,6 +247,7 @@ def readfiles(path=None):
         pm = BaseMetadataFile(a)
         #print(f"file {a}, name: {pm.get_name()}, uuids:{pm.asset_uuids}")
         pm.dumpex()
+
 
     for a in p.glob("*.memorymetadata"):
         print(f"file {a}")
