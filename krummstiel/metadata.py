@@ -12,16 +12,125 @@ from pathlib import Path
 import uuid
 import pprint
 import click
+import plistlib
+import datetime
 
 # important keys
 TOP = "$top"
 OBJ = "$objects"
+ARC = '$archiver'
+
 TIT = 'title'
 ASSETS = 'assetUUIDs'
 SUUID = "uuid"
 TRASH = 'isInTrash'
 
+NSKEYS = 'NS.objects'
+NSOBJECTS = 'NS.objects'
+NSTIME = 'NS.time'
+NSDATA = "NS.data"
+
 PLISTHEADER = b'bplist00'
+
+
+def _unwrap_bytes(b, uuids=False):
+    if len(b) > len(PLISTHEADER) and b[0:len(PLISTHEADER)] == PLISTHEADER:
+        return unwrap(plistlib.loads(b))
+
+    if uuids:
+        return _unwrap_uuids(b)
+
+    return b
+
+
+def _unwrap_uuids(b):
+    data = []
+    i = 0
+    while i < len(b):
+        ux = uuid.UUID(bytes=b[i:i + 16])
+        data.append(ux)
+        i = i + 16
+    return data
+
+
+def unwrap_dict(d: dict):
+    if not d:
+        return {}
+
+    if NSKEYS in d and NSOBJECTS in d:
+        data2 = {}
+        for k, v in zip(d[NSKEYS], d[NSOBJECTS]):
+            data2[unwrap(k)] = unwrap(v)
+        return data2
+
+    if NSOBJECTS in d:
+        data2 = []
+        for v in d[NSOBJECTS]:
+            data2.append(unwrap(v))
+        return data2
+
+    if ARC in d and TOP in d and OBJ in d:
+        if d[ARC] == 'NSKeyedArchiver':
+            return read_nsarchiver(d)
+
+    if NSTIME in d:
+        return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=d[NSTIME])
+
+    for t in d:
+        d[t] = unwrap(d[t])
+
+    return d
+
+
+def unwrap(x):
+    if not x:
+        return ""
+
+    if isinstance(x, int) or isinstance(x, float):
+        return x
+
+    if isinstance(x, plistlib.UID):
+        return x.data
+
+    if type(x) is dict:
+        return unwrap_dict(x)
+
+    if type(x) is bytes:
+        return _unwrap_bytes(x)
+
+    return x
+
+
+def read_nsarchiver(plist=None):
+
+    if not plist:
+        return {}
+
+    # need all 3 items in the dict
+    if ARC not in plist or TOP not in plist or OBJ not in plist:
+        return plist
+
+    if plist[ARC] != 'NSKeyedArchiver':
+        return plist
+
+    result_dict = {}
+    for t in plist[TOP]:
+        index = plist[TOP][t]
+
+        if isinstance(index, plistlib.UID):
+            index = index.data
+            data = plist[OBJ][index]
+            print(f"t {t}, type {type(data)}")
+
+            if type(data) is bytes:
+                result_dict[t] = _unwrap_bytes(data, str(t).endswith('UUIDs'))
+            else:
+                result_dict[t] = unwrap(data)
+        else:
+            result_dict[t] = index
+
+    return result_dict
+
 
 class BaseMetadataFile:
 
@@ -42,33 +151,7 @@ class BaseMetadataFile:
         with open(self.file, "rb") as f:
             self.metadata = plistlib.load(f)
 
-        self._uuid_index = self.metadata[TOP][SUUID].data
-        self.uuid = uuid.UUID("{" + self.metadata[OBJ][self._uuid_index] + "}")
-
-        for t in self.metadata[TOP]:
-            index = self.metadata[TOP][t]
-
-            if isinstance(index, plistlib.UID):
-                index = index.data
-                data = self.metadata[OBJ][index]
-                print(f"t {t}, type {type(data)}")
-                if type(data) is bytes:
-                    if len(data) > len(PLISTHEADER) and data[0:len(PLISTHEADER)] == PLISTHEADER:
-                        data2 = plistlib.loads(data)  # seems recursive a
-                        data = data2
-                    elif str(t).endswith('UUIDs'):
-                        data2 = data
-                        data = []
-                        i = 0
-                        while i < len(data2):
-                            ux = uuid.UUID(bytes=data2[i:i + 16])
-                            data.append(ux)
-                            i = i + 16
-
-                self.unpacked_metadata[t] = data
-
-            else:
-                self.unpacked_metadata[t] = index
+        self.unpacked_metadata = read_nsarchiver(self.metadata)
 
     def dump(self):
         pprint.pp(self.metadata)
@@ -145,14 +228,15 @@ def readfiles(path=None):
     p = Path(path)
 
     for a in p.glob("*.albummetadata"):
-        pm = PhotosMetadataFile(a)
-        print(f"file {a}, name: {pm.get_name()}, uuids:{pm.asset_uuids}")
+        print(f"file {a}")
+        pm = BaseMetadataFile(a)
+        #print(f"file {a}, name: {pm.get_name()}, uuids:{pm.asset_uuids}")
         pm.dumpex()
 
     for a in p.glob("*.memorymetadata"):
         print(f"file {a}")
         pm = BaseMetadataFile(a)
-        print(f"file {a}, name: {pm.uuid}")
+        #print(f"file {a}, name: {pm.uuid}")
         pm.dumpex()
 
 
