@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: MIT
 
 """
-handle Metadata information from ios
+handle Metadata information from ios.
+Reads and unwraps all kind of plist in use for albums e.g.
+ *.facemetadata, *.albummetadata, *.foldermetadata
 
 For documentation visit: https://github.com/yoshtec/krummstiel
 """
@@ -15,28 +17,38 @@ import click
 import plistlib
 import datetime
 import shutil
+import re
+
+UUID_REGEX = re.compile(
+    "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z", re.I
+)
 
 # important keys
 TOP = "$top"
 OBJ = "$objects"
-ARC = '$archiver'
+ARC = "$archiver"
+CLASS = "$class"
 
-TIT = 'title'
-ASSETS = 'assetUUIDs'
+TIT = "title"
+ASSETS = "assetUUIDs"
 SUUID = "uuid"
-TRASH = 'isInTrash'
+TRASH = "isInTrash"
+ROOT = "root"
 
-NSKEYS = 'NS.keys'
-NSOBJECTS = 'NS.objects'
-NSTIME = 'NS.time'
+PHMFEATUREENCODER = "PHMemoryFeatureEncoder"
+NSKEYEDARCHIVER = "NSKeyedArchiver"
+
+NSKEYS = "NS.keys"
+NSOBJECTS = "NS.objects"
+NSTIME = "NS.time"
 NSDATA = "NS.data"
-NSSTRING = 'NS.string'
+NSSTRING = "NS.string"
 
-PLISTHEADER = b'bplist00'
+PLISTHEADER = b"bplist00"
 
 
 def _unwrap_bytes(b, uuids=False):
-    if len(b) > len(PLISTHEADER) and b[0:len(PLISTHEADER)] == PLISTHEADER:
+    if len(b) > len(PLISTHEADER) and b[0 : len(PLISTHEADER)] == PLISTHEADER:
         return unwrap(plistlib.loads(b))
 
     if uuids:
@@ -49,13 +61,13 @@ def _unwrap_uuids(b):
     data = []
     i = 0
     while i < len(b):
-        ux = uuid.UUID(bytes=b[i:i + 16])
+        ux = uuid.UUID(bytes=b[i : i + 16])
         data.append(ux)
         i = i + 16
     return data
 
 
-def unwrap_dict(d: dict, orig: list = None):
+def _unwrap_dict(d: dict, orig: list = None):
     if d is None:
         return {}
 
@@ -66,8 +78,26 @@ def unwrap_dict(d: dict, orig: list = None):
         return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=d[NSTIME])
 
     if ARC in d and TOP in d and OBJ in d:
-        if d[ARC] == 'NSKeyedArchiver':
-            return read_nsarchiver(d)
+        if d[ARC] in [NSKEYEDARCHIVER, PHMFEATUREENCODER]:
+            result_dict = {}
+            for t in d[TOP]:
+                index = d[TOP][t]
+
+                if isinstance(index, plistlib.UID):
+                    index = index.data
+                    data = d[OBJ][index]
+                    if type(data) is bytes:
+                        result_dict[t] = _unwrap_bytes(data, str(t).endswith("UUIDs"))
+                    else:
+                        result_dict[t] = unwrap(data, d[OBJ])
+                else:
+                    result_dict[t] = index
+
+            # unpack single "root" dictionaries
+            if ROOT in result_dict and len(result_dict) == 1:
+                return result_dict[ROOT]
+
+            return result_dict
 
     if NSDATA in d:
         return unwrap(d[NSDATA])
@@ -75,10 +105,10 @@ def unwrap_dict(d: dict, orig: list = None):
     if NSKEYS in d and NSOBJECTS in d:
         data2 = {}
         for k, v in zip(d[NSKEYS], d[NSOBJECTS]):
-            #print(f"k,v:{k},{v}")
+            # print(f"k,v:{k},{v}")
             k = unwrap(k, orig)
             v = unwrap(v, orig)
-            #print(f"k,v:{k},{v}")
+            # print(f"k,v:{k},{v}")
             data2[k] = v
         return data2
 
@@ -98,7 +128,7 @@ def unwrap(x, orig: list = None):
     if x is None:
         return ""
 
-    if isinstance(x, int) or isinstance(x, float):
+    if isinstance(x, int) or isinstance(x, float) or isinstance(x, bool):
         return x
 
     if isinstance(x, plistlib.UID):
@@ -107,16 +137,22 @@ def unwrap(x, orig: list = None):
             x = unwrap(orig[x], orig)
         return x
 
+    if isinstance(x, str):
+        if UUID_REGEX.match(x):
+            return uuid.UUID(x)
+        return x
+
     if isinstance(x, dict):
-        return unwrap_dict(x, orig)
+        return _unwrap_dict(x, orig)
 
     if type(x) is bytes:
         return _unwrap_bytes(x)
 
+    # Fallback just return the original
     return x
 
 
-def read_nsarchiver(plist=None):
+def read_ns_archiver(plist=None):
 
     if not plist:
         return {}
@@ -125,28 +161,13 @@ def read_nsarchiver(plist=None):
     if ARC not in plist or TOP not in plist or OBJ not in plist:
         return plist
 
-    if plist[ARC] != 'NSKeyedArchiver':
+    if plist[ARC] not in [NSKEYEDARCHIVER, PHMFEATUREENCODER]:
         return plist
 
-    result_dict = {}
-    for t in plist[TOP]:
-        index = plist[TOP][t]
-
-        if isinstance(index, plistlib.UID):
-            index = index.data
-            data = plist[OBJ][index]
-            if type(data) is bytes:
-                result_dict[t] = _unwrap_bytes(data, str(t).endswith('UUIDs'))
-            else:
-                result_dict[t] = unwrap(data, plist[OBJ])
-        else:
-            result_dict[t] = index
-
-    return result_dict
+    return unwrap(plist)
 
 
 class BaseMetadataFile:
-
     def __init__(self, file: Path):
         self.metadata = None
         self.file = file
@@ -164,7 +185,7 @@ class BaseMetadataFile:
         with open(self.file, "rb") as f:
             self.metadata = plistlib.load(f)
 
-        self.unpacked_metadata = read_nsarchiver(self.metadata)
+        self.unpacked_metadata = read_ns_archiver(self.metadata)
 
     def dump(self):
         width, lines = shutil.get_terminal_size()
@@ -176,7 +197,6 @@ class BaseMetadataFile:
 
 
 class PhotosMetadataFile(BaseMetadataFile):
-
     def __init__(self, file: Path):
         BaseMetadataFile.__init__(self, file=file)
 
@@ -208,7 +228,7 @@ class PhotosMetadataFile(BaseMetadataFile):
 
         i = 0
         while i < len(assets_data):
-            ux = uuid.UUID(bytes=assets_data[i:i + 16])
+            ux = uuid.UUID(bytes=assets_data[i : i + 16])
             self.asset_uuids.append(ux)
             i = i + 16
 
@@ -226,9 +246,9 @@ class PhotosMetadataFile(BaseMetadataFile):
 
 
 class MemoryMetaDataFile(PhotosMetadataFile):
-
     def __init__(self, file: Path):
         PhotosMetadataFile.__init__(self, file)
+
 
 #    def get_name(self):
 #        if self.metadata:
@@ -236,25 +256,20 @@ class MemoryMetaDataFile(PhotosMetadataFile):
 
 
 @click.command()
-@click.option("--path", type=click.Path(exists=True, file_okay=False))
-def readfiles(path=None):
+@click.argument(
+    "file", nargs=-1, type=click.Path(exists=True, file_okay=True, readable=True)
+)
+@click.option("--raw", "-r", default=False, is_flag=True)
+def cat(file=None, raw=False):
 
-    print("hi")
-    p = Path(path)
-
-    for a in p.glob("*.albummetadata"):
-        print(f"file {a}")
-        pm = BaseMetadataFile(a)
-        #print(f"file {a}, name: {pm.get_name()}, uuids:{pm.asset_uuids}")
+    for p in file:
+        p = Path(p)
+        print(f"Analyzing file {p}:")
+        pm = BaseMetadataFile(p)
+        if raw:
+            pm.dump()
         pm.dumpex()
 
 
-    for a in p.glob("*.memorymetadata"):
-        print(f"file {a}")
-        pm = BaseMetadataFile(a)
-        #print(f"file {a}, name: {pm.uuid}")
-        pm.dumpex()
-
-
-if __name__ == '__main__':
-    readfiles()
+if __name__ == "__main__":
+    cat()

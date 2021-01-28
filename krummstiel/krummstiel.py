@@ -14,8 +14,7 @@ import shlex
 import sys
 import shutil
 import os
-import uuid
-import pprint
+import click
 from pathlib import Path
 
 ENC = "utf-8"
@@ -64,7 +63,6 @@ class Operation:
         if not ignore_return_code and p.returncode != 0:
             raise RuntimeError(f"failed to run '{cmd_str}'")
         return stdout
-
 
 
 class MiDevice:
@@ -231,54 +229,34 @@ class MiDevice:
         self.umount()
 
 
-def main(argv=None):
-    import argparse
+@click.command(
+    help="This is the 'krummstiel' iOS Backup tool! Regularly backup multiple iOS devices.",
+    epilog="Source and information: https://github.com/yoshtec/krummstiel",
+)
+@click.option(
+    "--config",
+    "-c",
+    required=True,
+    help="use this config file",
+)
+@click.option(
+    "--discover",
+    "-d",
+    help="List devices that are currently connected, that are not in your config file. "
+    "Prints configuration stub for the config file",
+)
+@click.option(
+    "--verbose",
+    "-v",
+    help="verbose output, increase amount to increase verbosity",
+    count=True,
+    default=0,
+)
+def main(config=None, discover=False, verbose=0):
     import configparser
 
-    parser = argparse.ArgumentParser(
-        description="This is the 'krummstiel' iOS Backup tool! Regularly backup multiple iOS devices.",
-        epilog="Source and information: https://github.com/yoshtec/krummstiel",
-    )
-
-    parser.add_argument(
-        "--config",
-        "-c",
-        metavar="FILE",
-        dest="config",
-        required=True,
-        help="use config file",
-    )
-
-    parser.add_argument(
-        "--discover",
-        "-d",
-        dest="discover",
-        action="store_true",
-        help="List devices that are currently connected, yet not in your config file. "
-        "Print configuration stub for the config file",
-    )
-
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        help="verbose output, increase amount to increase verbosity",
-        dest="verbose",
-        action="count",
-        default=0,
-    )
-
-    if not argv:
-        argv = sys.argv[1:]
-
-    # safety net if no arguments are given call for help
-    if len(argv) == 0:
-        parser.print_help()
-        return 0
-
-    pa = parser.parse_args(argv)
-
     op = Operation()
-    if pa.verbose > 0:
+    if verbose > 0:
         op = Operation(debug=print, error=print, info=print)
         op.debug("entering verbose mode")
 
@@ -291,28 +269,25 @@ def main(argv=None):
         "idevice_id",
         "ideviceinfo",
     ]
+    has_error = False
     for cmd in required_commands:
-        satisfied = True
         if shutil.which(cmd) is None:
             op.error(f"cmd: {cmd} is missing")
-            satisfied = False
+            has_error = True
 
-        if not satisfied:
-            op.error(f"Requirements are missing! please install")
-            op.error(f"    apt install libimobiledevice-utils rsync ifuse ")
-            return 1
+    if has_error:
+        op.error(f"Requirements are missing! please install e.g.:")
+        op.error(f"    apt install libimobiledevice-utils rsync ifuse ")
+        return 1
 
-    has_error = False
-
-    if pa.config:
-
+    if config:
         config = configparser.ConfigParser()
-        config.read(pa.config)
+        config.read(config)
 
         if len(config.sections()) == 0:
-            op.info(f"Warning: config file '{pa.config}' is empty or not existent")
+            op.warn(f"Warning: config file '{config}' is empty or not existent")
 
-        if pa.discover:
+        if discover:
             for dev in MiDevice.discover(op=op).splitlines():
                 if not config.has_section(dev):
                     device = MiDevice(uid=dev, op=op)
@@ -394,7 +369,7 @@ def main(argv=None):
                 op.info(f"device '{name}' with uid={s} not cooled down. skipping!")
 
             device.mount()
-            device.backup(verbose=pa.verbose >= 2)
+            device.backup(verbose=verbose >= 2)
 
             if config.getboolean(s, "prune_photos", fallback=False):
                 device.prune_photos()
@@ -409,4 +384,4 @@ def main(argv=None):
 
 
 if "__main__" == __name__:
-    sys.exit(main(sys.argv))
+    sys.exit(main())
