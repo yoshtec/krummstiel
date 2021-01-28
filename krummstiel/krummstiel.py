@@ -281,15 +281,15 @@ def main(config=None, discover=False, verbose=0):
         return 1
 
     if config:
-        config = configparser.ConfigParser()
-        config.read(config)
+        conf = configparser.ConfigParser()
+        conf.read(config)
 
-        if len(config.sections()) == 0:
-            op.warn(f"Warning: config file '{config}' is empty or not existent")
+        if len(conf.sections()) == 0:
+            op.warn(f"Warning: config file '{conf}' is empty or not existent")
 
         if discover:
             for dev in MiDevice.discover(op=op).splitlines():
-                if not config.has_section(dev):
+                if not conf.has_section(dev):
                     device = MiDevice(uid=dev, op=op)
                     device_name = device.get_name()
                     device_paired = device.check_paired()
@@ -308,9 +308,9 @@ def main(config=None, discover=False, verbose=0):
                         op.info(f"device is already paired")
             return 0
 
-        for s in config.sections():
+        for s in conf.sections():
 
-            name = config.get(s, "name", fallback=None)
+            name = conf.get(s, "name", fallback=None)
             if name is None:
                 op.error(
                     f"config error: 'name' tag is missing from config section: [{s}]"
@@ -318,11 +318,11 @@ def main(config=None, discover=False, verbose=0):
                 has_error = True
                 continue
 
-            if config.getboolean(s, "ignore", fallback=False):
+            if conf.getboolean(s, "ignore", fallback=False):
                 op.info(f"ignoring device '{name}' with uid={s}")
                 continue
 
-            backup_path = config.get(s, "backup_path", fallback=None)
+            backup_path = conf.get(s, "backup_path", fallback=None)
             if backup_path is None:
                 op.error(
                     f"config error: backup_path is missing from config section [{s}] or in [DEFAULT] section"
@@ -331,7 +331,7 @@ def main(config=None, discover=False, verbose=0):
                 continue
             backup_path = Path(backup_path)
 
-            exclude = config.get(s, "exclude", fallback=None)
+            exclude = conf.get(s, "exclude", fallback=None)
             if exclude is not None:
                 if exclude.startswith("[") and exclude.endswith("]"):
                     import json
@@ -364,14 +364,14 @@ def main(config=None, discover=False, verbose=0):
                 op.info(f"    idevicepair -u {device.uid}")
                 continue
 
-            cool_down_period = config.getint(s, "cool_down_period", fallback=0)
+            cool_down_period = conf.getint(s, "cool_down_period", fallback=0)
             if not device.is_cooled_down(cool_down_period):
                 op.info(f"device '{name}' with uid={s} not cooled down. skipping!")
 
             device.mount()
             device.backup(verbose=verbose >= 2)
 
-            if config.getboolean(s, "prune_photos", fallback=False):
+            if conf.getboolean(s, "prune_photos", fallback=False):
                 device.prune_photos()
 
             device.umount()

@@ -187,6 +187,9 @@ class BaseMetadataFile:
 
         self.unpacked_metadata = read_ns_archiver(self.metadata)
 
+        if SUUID in self.unpacked_metadata:
+            self.uuid = self.unpacked_metadata[SUUID]
+
     def dump(self):
         width, lines = shutil.get_terminal_size()
         pprint.pp(self.metadata, width=width)
@@ -248,11 +251,6 @@ class PhotosMetadataFile(BaseMetadataFile):
 class MemoryMetaDataFile(PhotosMetadataFile):
     def __init__(self, file: Path):
         PhotosMetadataFile.__init__(self, file)
-
-
-#    def get_name(self):
-#        if self.metadata:
-#            return f"{self.metadata[OBJ][2]} {self.metadata[OBJ][3]}"
 
 
 @click.command()

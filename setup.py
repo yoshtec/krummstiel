@@ -5,7 +5,7 @@ with open("Readme.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="krummstiel",
-    version="0.0.8",
+    version="0.0.9",
     author="Yoshtec",
     author_email="yoshtec@gmail.com",
     description="Backup multiple iOS (iPhone/iPad) devices regularly",
