@@ -295,17 +295,17 @@ def main(config=None, discover=False, verbose=0):
                     device_paired = device.check_paired()
 
                     op.info(f"new device discovered: {dev}")
-                    op.info(f"Add to your config file:")
+                    op.info("Add to your config file:")
                     op.info("---")
                     op.info(f"[{dev}]")
                     op.info(f"name = {device_name}")
                     op.info("---")
                     op.info("")
                     if not device_paired:
-                        op.info(f"Also pair your device by executing:")
+                        op.info("Also pair your device by executing:")
                         op.info(f"    idevicepair -u {dev}")
                     else:
-                        op.info(f"device is already paired")
+                        op.info("device is already paired")
             return 0
 
         for s in conf.sections():
