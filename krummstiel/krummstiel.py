@@ -17,7 +17,7 @@ import os
 import click
 from pathlib import Path
 from click_default_group import DefaultGroup
-import metadata
+from .metadata import cat_metadata_files
 
 ENC = "utf-8"
 
@@ -424,7 +424,7 @@ def cat_md(file=None, raw=False, recurse=False):
 
     and general .plist like files.
     """
-    sys.exit(metadata.cat_metadata_files(file=file, raw=raw, recurse=recurse))
+    sys.exit(cat_metadata_files(file=file, raw=raw, recurse=recurse))
 
 
 if "__main__" == __name__:
