@@ -215,7 +215,6 @@ class PhotosMetadataFile(BaseMetadataFile):
         self.asset_uuids = []
         self.title = ""
         self.uuid = None
-
         self.isInTrash = False
 
         self._read()
@@ -228,6 +227,9 @@ class PhotosMetadataFile(BaseMetadataFile):
 
         if ASSETUUIDS in self.unpacked_metadata:
             self.asset_uuids = self.unpacked_metadata[ASSETUUIDS]
+
+        if TRASH in self.unpacked_metadata:
+            self.isInTrash = bool(self.unpacked_metadata[TRASH])
 
     def get_picture_uuids(self):
         return self.asset_uuids
