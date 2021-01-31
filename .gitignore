@@ -8,5 +8,6 @@ krummstiel.egg-info
 .idea
 
 tmp
+__pycache__
 
 
