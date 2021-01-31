@@ -16,6 +16,8 @@ import shutil
 import os
 import click
 from pathlib import Path
+from click_default_group import DefaultGroup
+import metadata
 
 ENC = "utf-8"
 
@@ -229,10 +231,18 @@ class MiDevice:
         self.umount()
 
 
-@click.command(
-    help="This is the 'krummstiel' iOS Backup tool! Regularly backup multiple iOS devices.",
-    epilog="Source and information: https://github.com/yoshtec/krummstiel",
+@click.group(
+    cls=DefaultGroup,
+    default="backup",
+    default_if_no_args=True,
 )
+def cli():
+    """This is the krummstiel iOS Backup tool! Backup your ios devices or examine metadata
+    files and information of your ios device"""
+    pass
+
+
+@cli.command()
 @click.option(
     "--config",
     "-c",
@@ -242,6 +252,8 @@ class MiDevice:
 @click.option(
     "--discover",
     "-d",
+    default=False,
+    is_flag=True,
     help="List devices that are currently connected, that are not in your config file. "
     "Prints configuration stub for the config file",
 )
@@ -252,7 +264,8 @@ class MiDevice:
     count=True,
     default=0,
 )
-def main(config=None, discover=False, verbose=0):
+def backup(config=None, discover=False, verbose=0):
+    """Regularly backup multiple iOS devices."""
     import configparser
 
     op = Operation()
@@ -278,7 +291,7 @@ def main(config=None, discover=False, verbose=0):
     if has_error:
         op.error(f"Requirements are missing! please install e.g.:")
         op.error(f"    apt install libimobiledevice-utils rsync ifuse ")
-        return 1
+        sys.exit(1)
 
     if config:
         conf = configparser.ConfigParser()
@@ -286,6 +299,7 @@ def main(config=None, discover=False, verbose=0):
 
         if len(conf.sections()) == 0:
             op.warn(f"Warning: config file '{conf}' is empty or not existent")
+            has_error = True
 
         if discover:
             for dev in MiDevice.discover(op=op).splitlines():
@@ -378,10 +392,40 @@ def main(config=None, discover=False, verbose=0):
             device.notify()
 
     if has_error:
-        return 2
+        sys.exit(1)
 
     return 0
 
 
+@cli.command()
+@click.argument(
+    "file", nargs=-1, type=click.Path(exists=True, file_okay=True, readable=True)
+)
+@click.option(
+    "--raw", "-r", default=False, is_flag=True, help="also print raw plist contents"
+)
+@click.option(
+    "--recurse",
+    "-R",
+    default=False,
+    is_flag=True,
+    help="recurse into subdirs, reads all files ignores non plist files",
+)
+def cat_md(file=None, raw=False, recurse=False):
+    """
+    display contents of plist metadata files. helps to understand where and how data
+    is stored on your ios device. Reads and displays:
+
+    \b
+        *.albummetadata
+        *.memorymetadata
+        *.facemetadata
+        *.foldermetadata
+
+    and general .plist like files.
+    """
+    sys.exit(metadata.cat_metadata_files(file=file, raw=raw, recurse=recurse))
+
+
 if "__main__" == __name__:
-    sys.exit(main())
+    sys.exit(cli())

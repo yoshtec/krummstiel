@@ -15,8 +15,10 @@ import uuid
 import pprint
 import click
 import plistlib
+from plistlib import InvalidFileException
 import datetime
 import shutil
+import sys
 import re
 
 UUID_REGEX = re.compile(
@@ -33,6 +35,7 @@ TIT = "title"
 ASSETS = "assetUUIDs"
 SUUID = "uuid"
 TRASH = "isInTrash"
+ASSETUUIDS = "assetUUIDs"
 ROOT = "root"
 
 PHMFEATUREENCODER = "PHMemoryFeatureEncoder"
@@ -79,7 +82,7 @@ def _unwrap_dict(d: dict, orig: list = None):
 
     if ARC in d and TOP in d and OBJ in d:
         if d[ARC] in [NSKEYEDARCHIVER, PHMFEATUREENCODER]:
-            result_dict = {}
+            result_dict: dict = {}
             for t in d[TOP]:
                 index = d[TOP][t]
 
@@ -124,6 +127,16 @@ def _unwrap_dict(d: dict, orig: list = None):
     return d
 
 
+def _unwrap_list(l: list, orig: list = None):
+    if not l:
+        return []
+
+    result_list = []
+    for e in l:
+        result_list.append(unwrap(e, orig))
+    return result_list
+
+
 def unwrap(x, orig: list = None):
     if x is None:
         return ""
@@ -145,6 +158,9 @@ def unwrap(x, orig: list = None):
     if isinstance(x, dict):
         return _unwrap_dict(x, orig)
 
+    if isinstance(x, list):
+        _unwrap_list(x, orig)
+
     if type(x) is bytes:
         return _unwrap_bytes(x)
 
@@ -153,25 +169,21 @@ def unwrap(x, orig: list = None):
 
 
 def read_ns_archiver(plist=None):
+    return unwrap(plist)
+
+
+def read_plist(plist=None):
 
     if not plist:
         return {}
-
-    # need all 3 items in the dict
-    if ARC not in plist or TOP not in plist or OBJ not in plist:
-        return plist
-
-    if plist[ARC] not in [NSKEYEDARCHIVER, PHMFEATUREENCODER]:
-        return plist
 
     return unwrap(plist)
 
 
 class BaseMetadataFile:
     def __init__(self, file: Path):
-        self.metadata = None
         self.file = file
-        self.uuid = None
+        self.metadata = {}
         self.unpacked_metadata = {}
 
         self._read()
@@ -185,10 +197,7 @@ class BaseMetadataFile:
         with open(self.file, "rb") as f:
             self.metadata = plistlib.load(f)
 
-        self.unpacked_metadata = read_ns_archiver(self.metadata)
-
-        if SUUID in self.unpacked_metadata:
-            self.uuid = self.unpacked_metadata[SUUID]
+        self.unpacked_metadata = unwrap(self.metadata)
 
     def dump(self):
         width, lines = shutil.get_terminal_size()
@@ -205,44 +214,20 @@ class PhotosMetadataFile(BaseMetadataFile):
 
         self.asset_uuids = []
         self.title = ""
-
-        # sensible defaults
-        self._asset_uuid_index = 6
-        self._title_index = 0
-        self._uuid_index = 2
+        self.uuid = None
 
         self.isInTrash = False
 
         self._read()
 
-    def _read(self):
+        if SUUID in self.unpacked_metadata:
+            self.uuid = self.unpacked_metadata[SUUID]
 
-        BaseMetadataFile._read(self)
+        if TIT in self.unpacked_metadata:
+            self.title = self.unpacked_metadata[TIT]
 
-        if TIT in self.metadata[TOP]:
-            self._title_index = self.metadata[TOP][TIT].data  # UID type
-        else:
-            self._title_index = self._uuid_index
-
-        self._asset_uuid_index = self.metadata[TOP][ASSETS].data  # UID type
-
-        self.asset_uuids = []
-        assets_data = self._get_data()
-
-        i = 0
-        while i < len(assets_data):
-            ux = uuid.UUID(bytes=assets_data[i : i + 16])
-            self.asset_uuids.append(ux)
-            i = i + 16
-
-    def _get_data(self):
-        if self.metadata:
-            return self.metadata[OBJ][self._asset_uuid_index]
-        return []
-
-    def get_name(self):
-        if self.metadata:
-            return self.metadata[OBJ][self._title_index]
+        if ASSETUUIDS in self.unpacked_metadata:
+            self.asset_uuids = self.unpacked_metadata[ASSETUUIDS]
 
     def get_picture_uuids(self):
         return self.asset_uuids
@@ -259,14 +244,33 @@ class MemoryMetaDataFile(PhotosMetadataFile):
 )
 @click.option("--raw", "-r", default=False, is_flag=True)
 def cat(file=None, raw=False):
+    sys.exit(cat_metadata_files(file, raw))
 
-    for p in file:
-        p = Path(p)
-        print(f"Analyzing file {p}:")
-        pm = BaseMetadataFile(p)
-        if raw:
-            pm.dump()
-        pm.dumpex()
+
+def cat_metadata_files(file=None, raw=False, recurse=False):
+    stack: list = []
+    if not file:
+        return 0
+
+    stack.extend(file)
+
+    while len(stack) > 0:
+        p = Path(stack.pop())
+        if p.is_dir():
+            if recurse:
+                stack.extend(p.iterdir())
+        elif p.is_file():
+            click.secho(f"Analyzing file {p}:", bold=True)
+            try:
+                pm = BaseMetadataFile(p)
+                if raw:
+                    pm.dump()
+                    click.echo("")
+                pm.dumpex()
+            except InvalidFileException as i:
+                click.echo(f" - is not a valid plist. Skipping over Error '{i}'.")
+            click.echo("")
+    return 0
 
 
 if __name__ == "__main__":
