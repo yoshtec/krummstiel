@@ -18,40 +18,49 @@ import plistlib
 from plistlib import InvalidFileException
 import datetime
 import shutil
-import sys
+import sqlite3
 import re
 
 UUID_REGEX = re.compile(
     "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\Z", re.I
 )
 
+PATH_PICTURES = Path("DCIM")
+PATH_PHOTO_METADATA = Path("PhotoData")
+PATH_FACES = PATH_PHOTO_METADATA / Path("FacesMetadata")
+PATH_ALBUMS = PATH_PHOTO_METADATA / Path("AlbumsMetadata")
+
 # important keys
-TOP = "$top"
-OBJ = "$objects"
-ARC = "$archiver"
-CLASS = "$class"
+NS_TOP = "$top"
+NS_OBJ = "$objects"
+NS_ARC = "$archiver"
+NS_CLASS = "$class"
 
-TIT = "title"
-ASSETS = "assetUUIDs"
-SUUID = "uuid"
-TRASH = "isInTrash"
-ASSETUUIDS = "assetUUIDs"
-ROOT = "root"
+NS_KEYS = "NS.keys"
+NS_OBJECTS = "NS.objects"
+NS_TIME = "NS.time"
+NS_DATA = "NS.data"
+NS_STRING = "NS.string"
 
-PHMFEATUREENCODER = "PHMemoryFeatureEncoder"
-NSKEYEDARCHIVER = "NSKeyedArchiver"
+KEY_TITLE = "title"
+KEY_ASSETS = "assetUUIDs"
+KEY_UUID = "uuid"
+KEY_TRASH = "isInTrash"
+KEY_ASSETUUIDS = "assetUUIDs"
+KEY_ROOT = "root"
 
-NSKEYS = "NS.keys"
-NSOBJECTS = "NS.objects"
-NSTIME = "NS.time"
-NSDATA = "NS.data"
-NSSTRING = "NS.string"
+TYPE_PHMFEATUREENCODER = "PHMemoryFeatureEncoder"
+TYPE_NSKEYEDARCHIVER = "NSKeyedArchiver"
 
 PLISTHEADER = b"bplist00"
 
 
+def _is_plist(b: bytes):
+    return len(b) > len(PLISTHEADER) and b[0 : len(PLISTHEADER)] == PLISTHEADER
+
+
 def _unwrap_bytes(b, uuids=False):
-    if len(b) > len(PLISTHEADER) and b[0 : len(PLISTHEADER)] == PLISTHEADER:
+    if _is_plist(b):
         return unwrap(plistlib.loads(b))
 
     if uuids:
@@ -74,40 +83,40 @@ def _unwrap_dict(d: dict, orig: list = None):
     if d is None:
         return {}
 
-    if NSSTRING in d:
-        return d[NSSTRING]
+    if NS_STRING in d:
+        return d[NS_STRING]
 
-    if NSTIME in d:
-        return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=d[NSTIME])
+    if NS_TIME in d:
+        return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=d[NS_TIME])
 
-    if ARC in d and TOP in d and OBJ in d:
-        if d[ARC] in [NSKEYEDARCHIVER, PHMFEATUREENCODER]:
+    if NS_ARC in d and NS_TOP in d and NS_OBJ in d:
+        if d[NS_ARC] in [TYPE_NSKEYEDARCHIVER, TYPE_PHMFEATUREENCODER]:
             result_dict: dict = {}
-            for t in d[TOP]:
-                index = d[TOP][t]
+            for t in d[NS_TOP]:
+                index = d[NS_TOP][t]
 
                 if isinstance(index, plistlib.UID):
                     index = index.data
-                    data = d[OBJ][index]
+                    data = d[NS_OBJ][index]
                     if type(data) is bytes:
                         result_dict[t] = _unwrap_bytes(data, str(t).endswith("UUIDs"))
                     else:
-                        result_dict[t] = unwrap(data, d[OBJ])
+                        result_dict[t] = unwrap(data, d[NS_OBJ])
                 else:
                     result_dict[t] = index
 
             # unpack single "root" dictionaries
-            if ROOT in result_dict and len(result_dict) == 1:
-                return result_dict[ROOT]
+            if KEY_ROOT in result_dict and len(result_dict) == 1:
+                return result_dict[KEY_ROOT]
 
             return result_dict
 
-    if NSDATA in d:
-        return unwrap(d[NSDATA])
+    if NS_DATA in d:
+        return unwrap(d[NS_DATA])
 
-    if NSKEYS in d and NSOBJECTS in d:
+    if NS_KEYS in d and NS_OBJECTS in d:
         data2 = {}
-        for k, v in zip(d[NSKEYS], d[NSOBJECTS]):
+        for k, v in zip(d[NS_KEYS], d[NS_OBJECTS]):
             # print(f"k,v:{k},{v}")
             k = unwrap(k, orig)
             v = unwrap(v, orig)
@@ -115,9 +124,9 @@ def _unwrap_dict(d: dict, orig: list = None):
             data2[k] = v
         return data2
 
-    if NSOBJECTS in d:
+    if NS_OBJECTS in d:
         data2 = []
-        for v in d[NSOBJECTS]:
+        for v in d[NS_OBJECTS]:
             data2.append(unwrap(v, orig))
         return data2
 
@@ -181,29 +190,30 @@ def read_plist(plist=None):
 
 
 class BaseMetadataFile:
-    def __init__(self, file: Path):
+    def __init__(self, file: Path = None, bytes: bytes = None):
         self.file = file
         self.metadata = {}
         self.unpacked_metadata = {}
 
-        self._read()
+        if file:
+            if not self.file.is_file():
+                raise RuntimeError(f"Path '{self.file}' is not a regular file)")
 
-    def _read(self):
-        import plistlib
+            with open(self.file, "rb") as f:
+                self.metadata = plistlib.load(f)
 
-        if not self.file.is_file():
-            raise RuntimeError(f"Path '{self.file}' is not a regular file)")
-
-        with open(self.file, "rb") as f:
-            self.metadata = plistlib.load(f)
+        elif bytes and _is_plist(bytes):
+            self.metadata = plistlib.loads(bytes)
+        else:
+            raise RuntimeError(f"Supplied file '{file}' is invalid and supplied bytes is not a plist")
 
         self.unpacked_metadata = unwrap(self.metadata)
 
-    def dump(self):
+    def dump_raw(self):
         width, lines = shutil.get_terminal_size()
         pprint.pp(self.metadata, width=width)
 
-    def dumpex(self):
+    def dump(self):
         width, lines = shutil.get_terminal_size()
         pprint.pp(self.unpacked_metadata, width=width)
 
@@ -217,36 +227,68 @@ class PhotosMetadataFile(BaseMetadataFile):
         self.uuid = None
         self.isInTrash = False
 
-        self._read()
+        if KEY_UUID in self.unpacked_metadata:
+            self.uuid = self.unpacked_metadata[KEY_UUID]
 
-        if SUUID in self.unpacked_metadata:
-            self.uuid = self.unpacked_metadata[SUUID]
+        if KEY_TITLE in self.unpacked_metadata:
+            self.title = self.unpacked_metadata[KEY_TITLE]
 
-        if TIT in self.unpacked_metadata:
-            self.title = self.unpacked_metadata[TIT]
+        if KEY_ASSETUUIDS in self.unpacked_metadata:
+            self.asset_uuids = self.unpacked_metadata[KEY_ASSETUUIDS]
 
-        if ASSETUUIDS in self.unpacked_metadata:
-            self.asset_uuids = self.unpacked_metadata[ASSETUUIDS]
-
-        if TRASH in self.unpacked_metadata:
-            self.isInTrash = bool(self.unpacked_metadata[TRASH])
+        if KEY_TRASH in self.unpacked_metadata:
+            self.isInTrash = bool(self.unpacked_metadata[KEY_TRASH])
 
     def get_picture_uuids(self):
         return self.asset_uuids
 
 
-class MemoryMetaDataFile(PhotosMetadataFile):
-    def __init__(self, file: Path):
-        PhotosMetadataFile.__init__(self, file)
+class IOSPhotosDB:
 
+    def __init__(self, database_file: Path):
+        if not database_file.exists():
+            raise RuntimeError("Database file does not exist")
+        if not database_file.is_file():
+            raise RuntimeError("Database file is not a regular file")
 
-@click.command()
-@click.argument(
-    "file", nargs=-1, type=click.Path(exists=True, file_okay=True, readable=True)
-)
-@click.option("--raw", "-r", default=False, is_flag=True)
-def cat(file=None, raw=False):
-    sys.exit(cat_metadata_files(file, raw))
+        self.database_uri = f"file:{database_file.resolve()}?mode=ro"
+        self._db = sqlite3.connect(self.database_uri, uri=True)
+        self._connected = True
+
+    def get_picture_files(self, uuid_list: list):
+        """
+
+        :param uuid_list: list of uuids
+        :return: a dictionary with key uuid and value filename of picture
+        """
+        if not uuid_list or len(uuid_list) == 0:
+            return {}
+
+        q_str = ",".join("?" * len(uuid_list))
+
+        sql = f"select a.ZUUID, a.ZDIRECTORY, a.ZFILENAME from ZASSET a where a.ZUUID in ({q_str})"
+
+        result_rows = self._db.execute(sql, [str(u).upper() for u in uuid_list])
+        for row in result_rows.fetchall():
+            yield uuid.UUID(row[0]), Path(row[1]) / Path(row[2])
+
+    def get_stats(self):
+        """get some statistics from the Photos.sqlite"""
+        pass
+
+    def list_all_albums(self):
+        pass
+
+    def list_faces(self):
+        pass
+
+    def list_memories(self):
+        pass
+
+    def list_albums(self):
+        sql = f"SELECT ZUUID, ZTITLE FROM ZGENERICALBUM"
+        for row in self._db.execute(sql).fetchall():
+            yield uuid.UUID(row[0]), row[1]
 
 
 def cat_metadata_files(file=None, raw=False, recurse=False):
@@ -258,22 +300,23 @@ def cat_metadata_files(file=None, raw=False, recurse=False):
 
     while len(stack) > 0:
         p = Path(stack.pop())
-        if p.is_dir():
-            if recurse:
-                stack.extend(p.iterdir())
+        if p.is_dir() and recurse:
+            stack.extend(p.iterdir())
         elif p.is_file():
             click.secho(f"Analyzing file {p}:", bold=True)
             try:
                 pm = BaseMetadataFile(p)
                 if raw:
-                    pm.dump()
+                    pm.dump_raw()
                     click.echo("")
-                pm.dumpex()
+                pm.dump()
             except InvalidFileException as i:
                 click.echo(f" - is not a valid plist. Skipping over Error '{i}'.")
             click.echo("")
     return 0
 
 
-if __name__ == "__main__":
-    cat()
+def list_albums(db_file):
+    db = IOSPhotosDB(Path(db_file))
+
+    print(db.list_albums())

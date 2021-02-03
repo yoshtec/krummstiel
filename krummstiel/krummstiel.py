@@ -17,7 +17,7 @@ import os
 import click
 from pathlib import Path
 from click_default_group import DefaultGroup
-from .metadata import cat_metadata_files
+from .metadata import cat_metadata_files, IOSPhotosDB
 
 ENC = "utf-8"
 
@@ -399,19 +399,19 @@ def backup(config=None, discover=False, verbose=0):
 
 @cli.command()
 @click.argument(
-    "file", nargs=-1, type=click.Path(exists=True, file_okay=True, readable=True)
+    "files", nargs=-1, type=click.Path(exists=True, file_okay=True, readable=True)
 )
 @click.option(
-    "--raw", "-r", default=False, is_flag=True, help="also print raw plist contents"
+    "--raw", "-R", default=False, is_flag=True, help="also print raw plist contents"
 )
 @click.option(
     "--recurse",
-    "-R",
+    "-r",
     default=False,
     is_flag=True,
     help="recurse into subdirs, reads all files ignores non plist files",
 )
-def cat_md(file=None, raw=False, recurse=False):
+def cat_md(files=None, raw=False, recurse=False):
     """
     display contents of plist metadata files. helps to understand where and how data
     is stored on your ios device. Reads and displays:
@@ -424,7 +424,14 @@ def cat_md(file=None, raw=False, recurse=False):
 
     and general .plist like files.
     """
-    sys.exit(cat_metadata_files(file=file, raw=raw, recurse=recurse))
+    sys.exit(cat_metadata_files(file=files, raw=raw, recurse=recurse))
+
+
+@cli.command()
+@click.argument("db_file", type=click.Path(exists=True, file_okay=True, dir_okay=False))
+def db(db_file=None):
+    db = IOSPhotosDB(db_file)
+    click.echo(db.list_albums())
 
 
 if "__main__" == __name__:
