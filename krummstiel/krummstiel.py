@@ -15,9 +15,10 @@ import sys
 import shutil
 import os
 import click
+import pprint as p
 from pathlib import Path
 from click_default_group import DefaultGroup
-from .metadata import cat_metadata_files, IOSPhotosDB
+from .metadata import cat_metadata_files, IOSPhotosDB, list_albums
 
 ENC = "utf-8"
 
@@ -430,8 +431,7 @@ def cat_md(files=None, raw=False, recurse=False):
 @cli.command()
 @click.argument("db_file", type=click.Path(exists=True, file_okay=True, dir_okay=False))
 def db(db_file=None):
-    db = IOSPhotosDB(db_file)
-    click.echo(db.list_albums())
+    list_albums(db_file)
 
 
 if "__main__" == __name__:

@@ -192,30 +192,30 @@ def read_plist(plist=None):
 class BaseMetadataFile:
     def __init__(self, file: Path = None, bytes: bytes = None):
         self.file = file
+        self.raw_metadata = {}
         self.metadata = {}
-        self.unpacked_metadata = {}
 
         if file:
             if not self.file.is_file():
                 raise RuntimeError(f"Path '{self.file}' is not a regular file)")
 
             with open(self.file, "rb") as f:
-                self.metadata = plistlib.load(f)
+                self.raw_metadata = plistlib.load(f)
 
         elif bytes and _is_plist(bytes):
-            self.metadata = plistlib.loads(bytes)
+            self.raw_metadata = plistlib.loads(bytes)
         else:
             raise RuntimeError(f"Supplied file '{file}' is invalid and supplied bytes is not a plist")
 
-        self.unpacked_metadata = unwrap(self.metadata)
+        self.metadata = unwrap(self.raw_metadata)
 
     def dump_raw(self):
         width, lines = shutil.get_terminal_size()
-        pprint.pp(self.metadata, width=width)
+        pprint.pp(self.raw_metadata, width=width)
 
     def dump(self):
         width, lines = shutil.get_terminal_size()
-        pprint.pp(self.unpacked_metadata, width=width)
+        pprint.pp(self.metadata, width=width)
 
 
 class PhotosMetadataFile(BaseMetadataFile):
@@ -227,17 +227,17 @@ class PhotosMetadataFile(BaseMetadataFile):
         self.uuid = None
         self.isInTrash = False
 
-        if KEY_UUID in self.unpacked_metadata:
-            self.uuid = self.unpacked_metadata[KEY_UUID]
+        if KEY_UUID in self.metadata:
+            self.uuid = self.metadata[KEY_UUID]
 
-        if KEY_TITLE in self.unpacked_metadata:
-            self.title = self.unpacked_metadata[KEY_TITLE]
+        if KEY_TITLE in self.metadata:
+            self.title = self.metadata[KEY_TITLE]
 
-        if KEY_ASSETUUIDS in self.unpacked_metadata:
-            self.asset_uuids = self.unpacked_metadata[KEY_ASSETUUIDS]
+        if KEY_ASSETUUIDS in self.metadata:
+            self.asset_uuids = self.metadata[KEY_ASSETUUIDS]
 
-        if KEY_TRASH in self.unpacked_metadata:
-            self.isInTrash = bool(self.unpacked_metadata[KEY_TRASH])
+        if KEY_TRASH in self.metadata:
+            self.isInTrash = bool(self.metadata[KEY_TRASH])
 
     def get_picture_uuids(self):
         return self.asset_uuids
@@ -246,6 +246,9 @@ class PhotosMetadataFile(BaseMetadataFile):
 class IOSPhotosDB:
 
     def __init__(self, database_file: Path):
+        if not database_file:
+            raise RuntimeError("database file is empty")
+        database_file = Path(database_file)
         if not database_file.exists():
             raise RuntimeError("Database file does not exist")
         if not database_file.is_file():
@@ -269,8 +272,10 @@ class IOSPhotosDB:
         sql = f"select a.ZUUID, a.ZDIRECTORY, a.ZFILENAME from ZASSET a where a.ZUUID in ({q_str})"
 
         result_rows = self._db.execute(sql, [str(u).upper() for u in uuid_list])
+        result = {}
         for row in result_rows.fetchall():
-            yield uuid.UUID(row[0]), Path(row[1]) / Path(row[2])
+            result[row[0]] = Path(row[1]) / Path(row[2])
+        return result
 
     def get_stats(self):
         """get some statistics from the Photos.sqlite"""
@@ -287,8 +292,10 @@ class IOSPhotosDB:
 
     def list_albums(self):
         sql = f"SELECT ZUUID, ZTITLE FROM ZGENERICALBUM"
+        result = {}
         for row in self._db.execute(sql).fetchall():
-            yield uuid.UUID(row[0]), row[1]
+            result[row[0]] = row[1]
+        return result
 
 
 def cat_metadata_files(file=None, raw=False, recurse=False):
@@ -317,6 +324,20 @@ def cat_metadata_files(file=None, raw=False, recurse=False):
 
 
 def list_albums(db_file):
-    db = IOSPhotosDB(Path(db_file))
-
-    print(db.list_albums())
+    db_file = Path(db_file)
+    db = IOSPhotosDB(db_file)
+    base_path = db_file.parents[0] / Path("AlbumsMetadata")
+    albums: dict = db.list_albums()
+    for k, v in albums.items():
+        files = base_path.glob(f"{k}.*")
+        had_file = False
+        pprint.pp(f"Album uid={k}, name={v}")
+        for f in files:
+            pprint.pp(f)
+            bmf = PhotosMetadataFile(f)
+            bmf.dump()
+            pcitures = db.get_picture_files(bmf.get_picture_uuids())
+            pprint.pp(pcitures)
+            had_file = True
+        if not had_file:
+            pprint.pp(f"no file for Album: uid={k} name={v} ")

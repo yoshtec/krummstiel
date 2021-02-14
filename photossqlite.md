@@ -1,13 +1,15 @@
 # Information on Photos.sqlite
 
-`Photos.sqlite` is an sqlite database conatining Metadata of all Pictures in the Library from your iPhone, iPad and macOS Photos Libraries.
+`Photos.sqlite` is an sqlite database containing Metadata of all Pictures in the Library from your iPhone and iPad. 
+The database is stored in `PhotoData/Photos.sqlite` on the mounted device. 
+Photos itself are stored in `DCIM/****APPL`. Not all Metadata is stored in the Database itself, a lot of important
+information is scattered within subdirectories of `PhotoData` stored in horrible plistfiles.
 
-Since it is not generally documented, I will document my research in understanding the Database here.
+Since it is not generally documented, I will document my research in understanding the Database here. 
 
-
-Location:
-* macOS `/Users/USERID/Pictures/Photos Library.photoslibrary/database/Photos.sqlite` hidden from Finder in the Photos Library.
-* iPhone & iPad: `PhotoData/Photos.sqlite` Folder on the mounted device. Photos itself are stored in `DCIM/****APPL`.
+MacOS also has a similar sqlite File hidden from Finder access stored within the Photos Library 
+at `/Users/USERID/Pictures/Photos Library.photoslibrary/database/Photos.sqlite`. Although it sounds similar, it is for
+the most part totally different. Please check  the [osxphotos](https://github.com/RhetTbull/osxphotos) lib for accessing 
 
 
 Ways of analysing, store or snapshot different versions and just do an diff of the Files

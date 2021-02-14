@@ -1,9 +1,11 @@
 import setuptools
 
-VERSION = "0.0.10"
+VERSION = "0.0.11"
 
 with open("Readme.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
+
+print("hi")
 
 setuptools.setup(
     name="krummstiel",
@@ -14,7 +16,7 @@ setuptools.setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/yoshtec/krummstiel",
-    entry_points={"console_scripts": ["krummstiel = krummstiel.krummstiel:main"]},
+    entry_points={"console_scripts": ["krummstiel = krummstiel.krummstiel:cli"]},
     packages=setuptools.find_packages(),
     install_requires=["click", "click-default-group"],
     classifiers=[
