@@ -46,24 +46,29 @@ class Operation:
         if self._debug:
             self._debug(msg)
 
+    def notify(self, msg):
+        cmd = 'notify-send'
+        if shutil.which(cmd) is not None:
+            self.call([cmd, "-a", "krummstiel", "-i", "phone-apple-iphone", msg], ignore_return_code=True)
+
     def call(self, args, ignore_return_code=False):
         import subprocess
 
         cmd_str = " ".join(args)
         self.debug(f"Execute command: '{cmd_str}'")
-        p = subprocess.Popen(
+        proc = subprocess.Popen(
             args,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             encoding=ENC,
         )
-        stdout, stderr = p.communicate()
+        stdout, stderr = proc.communicate()
         if stdout:
             self.debug(f"stdout: \n{stdout}")
         if stderr:
             self.debug(f"stderr: \n{stderr}")
-        if not ignore_return_code and p.returncode != 0:
+        if not ignore_return_code and proc.returncode != 0:
             raise RuntimeError(f"failed to run '{cmd_str}'")
         return stdout
 
@@ -390,7 +395,7 @@ def backup(config=None, discover=False, verbose=0):
                 device.prune_photos()
 
             device.umount()
-            device.notify()
+            op.notify(f"Backed up iOS Device: {name}")
 
     if has_error:
         sys.exit(1)
