@@ -41,6 +41,8 @@ NS_OBJECTS = "NS.objects"
 NS_TIME = "NS.time"
 NS_DATA = "NS.data"
 NS_STRING = "NS.string"
+NS_STRING2 = "NSString"
+NS_ATTRIBUTE = "NSAttributes"
 
 KEY_TITLE = "title"
 KEY_ASSETS = "assetUUIDs"
@@ -52,19 +54,39 @@ KEY_ROOT = "root"
 TYPE_PHMFEATUREENCODER = "PHMemoryFeatureEncoder"
 TYPE_NSKEYEDARCHIVER = "NSKeyedArchiver"
 
-PLISTHEADER = b"bplist00"
+HEAD_PLIST = b"bplist00"
+HEAD_XZ = b"\xfd7zXZ"
 
 
 def _is_plist(b: bytes):
-    return len(b) > len(PLISTHEADER) and b[0 : len(PLISTHEADER)] == PLISTHEADER
+    return len(b) > len(HEAD_PLIST) and b[0 : len(HEAD_PLIST)] == HEAD_PLIST
+
+
+def _is_xz(b: bytes):
+    return len(b) > len(HEAD_XZ) and b[0 : len(HEAD_XZ)] == HEAD_XZ
 
 
 def _unwrap_bytes(b, uuids=False):
+    if _is_xz(b):
+        import lzma
+
+        return unwrap(lzma.decompress(b))
+
     if _is_plist(b):
         return unwrap(plistlib.loads(b))
 
+    HEAD_FFF = b"\n\xd3\x04bplist00"
+    if len(b) > len(HEAD_FFF) and b[0 : len(HEAD_FFF)] == HEAD_FFF:
+        return unwrap(plistlib.loads(b[3:]))
+
     if uuids:
         return _unwrap_uuids(b)
+
+    # import hashlib
+    # m = hashlib.sha1()
+    # m.update(b)
+    # with open(f"./tmp/bin/bin_{m.hexdigest()}.bin", "wb") as f:
+    #     f.write(b)
 
     return b
 
@@ -85,6 +107,9 @@ def _unwrap_dict(d: dict, orig: list = None):
 
     if NS_STRING in d:
         return d[NS_STRING]
+
+    if NS_STRING2 in d:
+        return d[NS_STRING2]
 
     if NS_TIME in d:
         return datetime.datetime(2001, 1, 1) + datetime.timedelta(seconds=d[NS_TIME])
@@ -153,28 +178,33 @@ def unwrap(x, orig: list = None):
     if isinstance(x, int) or isinstance(x, float) or isinstance(x, bool):
         return x
 
-    if isinstance(x, plistlib.UID):
-        x = x.data
-        if orig is not None and len(orig) > x:
-            x = unwrap(orig[x], orig)
+    try:
+
+        if isinstance(x, plistlib.UID):
+            x = x.data
+            if orig is not None and len(orig) > x:
+                x = unwrap(orig[x], orig)
+            return x
+
+        if isinstance(x, str):
+            if UUID_REGEX.match(x):
+                return uuid.UUID(x)
+            return x
+
+        if isinstance(x, dict):
+            return _unwrap_dict(x, orig)
+
+        if isinstance(x, list):
+            return _unwrap_list(x, orig)
+
+        if type(x) is bytes:
+            return _unwrap_bytes(x)
+
+        # Fallback just return the original
         return x
 
-    if isinstance(x, str):
-        if UUID_REGEX.match(x):
-            return uuid.UUID(x)
-        return x
-
-    if isinstance(x, dict):
-        return _unwrap_dict(x, orig)
-
-    if isinstance(x, list):
-        _unwrap_list(x, orig)
-
-    if type(x) is bytes:
-        return _unwrap_bytes(x)
-
-    # Fallback just return the original
-    return x
+    except (RuntimeError, InvalidFileException) as r:
+        return f"$ERROR: {r}"
 
 
 def read_ns_archiver(plist=None):
@@ -190,7 +220,7 @@ def read_plist(plist=None):
 
 
 class BaseMetadataFile:
-    def __init__(self, file: Path = None, bytes: bytes = None):
+    def __init__(self, file: Path = None, bytez: bytes = None):
         self.file = file
         self.raw_metadata = {}
         self.metadata = {}
@@ -202,10 +232,12 @@ class BaseMetadataFile:
             with open(self.file, "rb") as f:
                 self.raw_metadata = plistlib.load(f)
 
-        elif bytes and _is_plist(bytes):
-            self.raw_metadata = plistlib.loads(bytes)
+        elif bytes and _is_plist(bytez):
+            self.raw_metadata = plistlib.loads(bytez)
         else:
-            raise RuntimeError(f"Supplied file '{file}' is invalid and supplied bytes is not a plist")
+            raise RuntimeError(
+                f"Supplied file '{file}' is invalid and supplied bytes is not a plist"
+            )
 
         self.metadata = unwrap(self.raw_metadata)
 
@@ -244,7 +276,6 @@ class PhotosMetadataFile(BaseMetadataFile):
 
 
 class IOSPhotosDB:
-
     def __init__(self, database_file: Path):
         if not database_file:
             raise RuntimeError("database file is empty")
@@ -254,7 +285,7 @@ class IOSPhotosDB:
         if not database_file.is_file():
             raise RuntimeError("Database file is not a regular file")
 
-        self.database_uri = f"file:{database_file.resolve()}?mode=ro"
+        self.database_uri = f"file:{database_file.resolve()}"  # ?mode=ro"
         self._db = sqlite3.connect(self.database_uri, uri=True)
         self._connected = True
 
@@ -291,7 +322,7 @@ class IOSPhotosDB:
         pass
 
     def list_albums(self):
-        sql = f"SELECT ZUUID, ZTITLE FROM ZGENERICALBUM"
+        sql = "SELECT ZUUID, ZTITLE FROM ZGENERICALBUM"
         result = {}
         for row in self._db.execute(sql).fetchall():
             result[row[0]] = row[1]
@@ -301,6 +332,7 @@ class IOSPhotosDB:
 def cat_metadata_files(file=None, raw=False, recurse=False):
     stack: list = []
     if not file:
+        click.echo(" - No file given!")
         return 0
 
     stack.extend(file)
@@ -316,6 +348,7 @@ def cat_metadata_files(file=None, raw=False, recurse=False):
                 if raw:
                     pm.dump_raw()
                     click.echo("")
+
                 pm.dump()
             except InvalidFileException as i:
                 click.echo(f" - is not a valid plist. Skipping over Error '{i}'.")
@@ -336,8 +369,8 @@ def list_albums(db_file):
             pprint.pp(f)
             bmf = PhotosMetadataFile(f)
             bmf.dump()
-            pcitures = db.get_picture_files(bmf.get_picture_uuids())
-            pprint.pp(pcitures)
+            pictures = db.get_picture_files(bmf.get_picture_uuids())
+            pprint.pp(pictures)
             had_file = True
         if not had_file:
             pprint.pp(f"no file for Album: uid={k} name={v} ")

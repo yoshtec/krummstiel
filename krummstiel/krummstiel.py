@@ -47,9 +47,12 @@ class Operation:
             self._debug(msg)
 
     def notify(self, msg):
-        cmd = 'notify-send'
+        cmd = "notify-send"
         if shutil.which(cmd) is not None:
-            self.call([cmd, "-a", "krummstiel", "-i", "phone-apple-iphone", msg], ignore_return_code=True)
+            self.call(
+                [cmd, "-a", "krummstiel", "-i", "phone-apple-iphone", msg],
+                ignore_return_code=True,
+            )
 
     def call(self, args, ignore_return_code=False):
         import subprocess

@@ -1,11 +1,9 @@
 import setuptools
 
-VERSION = "0.0.11"
+VERSION = "0.0.12"
 
 with open("Readme.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
-
-print("hi")
 
 setuptools.setup(
     name="krummstiel",

@@ -3,15 +3,18 @@ from click.testing import CliRunner
 
 
 class TestKrummstiel:
-
     def test_wrong_ini1(self):
         runner = CliRunner()
-        result = runner.invoke(krummstiel.backup, ['--config', "./tests/test_error1.ini", "-vv"])
+        result = runner.invoke(
+            krummstiel.backup, ["--config", "./tests/test_error1.ini", "-vv"]
+        )
         assert result.exit_code == 1
 
     def test_wrong_ini2(self):
         runner = CliRunner()
-        result = runner.invoke(krummstiel.backup, ['--config', "./tests/test_error2.ini", "-vv"])
+        result = runner.invoke(
+            krummstiel.backup, ["--config", "./tests/test_error2.ini", "-vv"]
+        )
         assert result.exit_code == 1
 
     # def test_no_args(self):
